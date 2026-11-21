@@ -24,6 +24,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,7 +62,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -416,7 +419,7 @@ fun AppNav(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)
+                .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp)
         )
 
         celebration?.let { item ->
@@ -639,17 +642,41 @@ private fun GritBottomNav(
     // the tab you are on becomes a solid button that pops its name open. The
     // reflow of the widening button is what makes the highlight feel like it
     // travels between tabs.
-    Surface(
-        modifier = modifier,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        shadowElevation = 12.dp
+    //
+    // The pill is drawn as a background, not a clipped container: Material
+    // Surface clips its content to its shape, and that clip is what shaved
+    // the corner of a selected end-tab. A background keeps the exact same
+    // look with nothing ever clipped.
+    Box(
+        modifier = modifier
+            .shadow(12.dp, CircleShape, clip = false)
+            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
     ) {
-        Row(
-            modifier = Modifier.padding(7.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
+        BoxWithConstraints {
+            // The bar breathes with the screen — a compact 360 dp phone gets
+            // the base size, roomier or lower-density screens get a taller
+            // one — but it must also never outgrow the width it is given.
+            // The five buttons are solved to fit, and if a device is so
+            // narrow that something has to give, the label clips first:
+            // the icons are never the thing that gets cut off.
+            val desiredUnit =
+                ((LocalConfiguration.current.screenWidthDp - 360).coerceIn(0, 160)) / 160f
+            val desiredHeight = (52 + 8 * desiredUnit).dp
+            val desiredLabel = 13f + 1.5f * desiredUnit
+            val labelEstimate = (tabs.maxOf { it.label.length } * desiredLabel * 0.65f).dp
+            val fitHeight = ((maxWidth - 29.dp - labelEstimate) / 5f).coerceAtLeast(0.dp)
+            val buttonHeight = minOf(desiredHeight, fitHeight).coerceIn(44.dp, 64.dp)
+            val unit = ((buttonHeight.value - 52f) / 8f).coerceIn(0f, 1f)
+            val iconBoxSize = (22 + 3 * unit).dp
+            val symbolSize = (20 + 3 * unit).dp
+            val labelSize = (13 + 1.5 * unit).sp
+            // Distance from the button's edge to the icon box.
+            val buttonPad = (buttonHeight - iconBoxSize) / 2
+
+            Row(
+                modifier = Modifier.padding(7.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
             tabs.forEach { item ->
                 val selected = item.id == current
                 val container by animateColorAsState(
@@ -663,9 +690,16 @@ private fun GritBottomNav(
                     animationSpec = tween(220),
                     label = "nav-content"
                 )
+                // The whole button pops with a spring, and the icon inside
+                // carries an extra bit of contrast on top of it.
+                val buttonScale by animateFloatAsState(
+                    targetValue = if (selected) 1.05f else 0.97f,
+                    animationSpec = spring(dampingRatio = 0.45f, stiffness = 380f),
+                    label = "nav-button-scale"
+                )
                 val iconScale by animateFloatAsState(
-                    targetValue = if (selected) 1.1f else 0.94f,
-                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 460f),
+                    targetValue = if (selected) 1.16f else 0.9f,
+                    animationSpec = spring(dampingRatio = 0.5f, stiffness = 480f),
                     label = "nav-icon-scale"
                 )
                 val badge = when (item.id) {
@@ -678,20 +712,29 @@ private fun GritBottomNav(
                     shape = CircleShape,
                     color = container,
                     contentColor = content,
-                    modifier = Modifier.height(48.dp)
+                    modifier = Modifier
+                        .height(buttonHeight)
+                        .scale(buttonScale)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
+                        // Symmetric padding keeps the idle button a perfect
+                        // circle at every size step.
+                        modifier = Modifier.padding(horizontal = buttonPad),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         Box(
                             Modifier
-                                .size(22.dp)
+                                .size(iconBoxSize)
                                 .scale(iconScale),
                             contentAlignment = Alignment.Center
                         ) {
-                            Symbol(item.symbol, size = 20.dp, filled = selected)
+                            Symbol(
+                                item.symbol,
+                                size = symbolSize,
+                                color = content,
+                                filled = selected
+                            )
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
@@ -746,8 +789,9 @@ private fun GritBottomNav(
                         ) {
                             Text(
                                 text = item.label,
-                                fontSize = 12.5.sp,
-                                lineHeight = 15.sp,
+                                color = content,
+                                fontSize = labelSize,
+                                lineHeight = (labelSize.value + 2.5f).sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 softWrap = false,
@@ -756,6 +800,7 @@ private fun GritBottomNav(
                         }
                     }
                 }
+            }
             }
         }
     }

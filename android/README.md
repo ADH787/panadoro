@@ -1,8 +1,27 @@
-# Panadoro 1.9.2
+# Panadoro 1.9.3
 
 Native Kotlin/Jetpack Compose build of the merged Panadoro habit tracker and
 Tomato focus timer. The UI data model and Firebase wire format are compatible
 with the quickshell app, so both clients stay in sync.
+
+## What's new in 1.9.3
+
+- Every icon sits dead-centre in its circle: the glyph renderer measures each
+  paragraph at the font's true height and centres it — verified against
+  rendered pixels — and a per-glyph offset table computed from the font's
+  ink boxes fixes asymmetric glyphs like the play triangle, coffee cup and
+  edit pen.
+- The leaderboard display name is an account setting now: chosen at sign-up,
+  edited in Settings, removed from the Ranks tab — and a stale client can no
+  longer quietly revert the board to a fallback name (Android, web and
+  Quickshell all carry the same guard).
+- Ranks refreshes quietly when you arrive: no loading row, and a re-save of
+  your name always wins back the board.
+- The focus-split donut draws with round arc ends; the rhythm chart's bars
+  are full capsules with a sliver of air between stacked tags.
+- Navigation polish: the floating bar is drawn as a background so no shape
+  ever clips the selected end-tab, it solves its size to always fit the
+  screen, and the selected tab pops its name open with springy scaling.
 
 ## What's new in 1.9.2
 

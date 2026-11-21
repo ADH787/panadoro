@@ -89,10 +89,10 @@ fun TagBarChart(
         ) {
             if (series.isEmpty()) return@Canvas
             val count = series.size
-            val gap = 3.dp.toPx()
             val slot = size.width / count
+            // Wider slots get a little more air between the capsule bars.
+            val gap = (slot * 0.22f).coerceIn(2.5.dp.toPx(), 6.dp.toPx())
             val barWidth = (slot - gap).coerceAtLeast(1f)
-            val corner = CornerRadius(min(barWidth / 2f, 3.dp.toPx()))
             val maxValue = maxOf(
                 series.maxOfOrNull { it.total.toFloat() } ?: 0f,
                 goalSeconds.toFloat()
@@ -101,39 +101,53 @@ fun TagBarChart(
             for (index in series.indices) {
                 val day = series[index]
                 val x = index * slot + gap / 2f
+                // The idle track is a full capsule too, so empty days read as
+                // part of the design instead of as a flat strip.
                 drawRoundRect(
                     color = trackColor.copy(alpha = 0.30f),
                     topLeft = Offset(x, 0f),
                     size = Size(barWidth, usableHeight),
-                    cornerRadius = corner
+                    cornerRadius = CornerRadius(barWidth / 2f)
                 )
                 if (day.total <= 0L) continue
                 val stagger = (enter.value * 1.55f - index.toFloat() / count * 0.55f)
                     .coerceIn(0f, 1f)
                 if (stagger <= 0f) continue
                 val barHeight = usableHeight * (day.total.toFloat() / maxValue) * stagger
+                // Each tag's slice is its own capsule, with a sliver of air
+                // between the slices so the stack reads as a tidy column of
+                // coloured pills.
+                val visibleCount = day.segments.count { it.seconds > 0L }
+                val segmentGap = 2.dp.toPx()
+                val gapsTotal = (visibleCount - 1).coerceAtLeast(0) * segmentGap
+                val colorHeight = (barHeight - gapsTotal).coerceAtLeast(0f)
                 var bottom = usableHeight
+                var drawn = 0
                 day.segments.forEachIndexed { segmentIndex, segment ->
                     if (segment.seconds <= 0L) return@forEachIndexed
-                    val height = barHeight * (segment.seconds.toFloat() / day.total.coerceAtLeast(1L))
+                    if (drawn > 0) bottom -= segmentGap
+                    val height = (colorHeight * segment.seconds.toFloat() /
+                        day.total.coerceAtLeast(1L)).coerceAtLeast(0.5f)
                     val color = segmentColors[index].getOrElse(segmentIndex) { fallbackColor }
                     drawRoundRect(
                         color = color,
                         topLeft = Offset(x, bottom - height),
-                        size = Size(barWidth, height.coerceAtLeast(0.5f)),
-                        cornerRadius = corner
+                        size = Size(barWidth, height),
+                        cornerRadius = CornerRadius(min(barWidth / 2f, height / 2f))
                     )
                     bottom -= height
+                    drawn++
                 }
             }
             if (goalSeconds > 0L) {
                 val y = usableHeight * (1f - goalSeconds.toFloat() / maxValue)
                 drawLine(
-                    color = labelColor.copy(alpha = 0.55f * enter.value),
+                    color = labelColor.copy(alpha = 0.6f * enter.value),
                     start = Offset(0f, y),
                     end = Offset(size.width, y),
                     strokeWidth = 1.2.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f))
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 6f))
                 )
             }
         }
@@ -214,7 +228,9 @@ fun FocusDonut(
                     useCenter = false,
                     topLeft = topLeft,
                     size = Size(diameter, diameter),
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Butt)
+                    // Round caps give the ring soft ends — including the
+                    // leading edge while the entrance animation sweeps it in.
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                 )
                 start += sweep
             }

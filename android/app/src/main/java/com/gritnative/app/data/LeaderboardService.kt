@@ -177,7 +177,16 @@ object LeaderboardService {
             val today = dateKey()
             val weekKey = thisWeekDays(today, settings.weekStartMonday).firstOrNull() ?: today
             val monthKey = LocalDate.now().withDayOfMonth(1).toString().take(7)
-            val effectiveName = displayName(settings, AuthService.email())
+            // If the board holds a newer name choice than this device knows
+            // about, publish the board's name instead of our own fallback.
+            // Otherwise a client that has not adopted the newest name yet
+            // could quietly revert the row while carrying its timestamp
+            // forward — and the row would look "fresh" to everyone.
+            val effectiveName = if (remote != null && remote.nameUpdatedAt > settings.displayNameUpdatedAt) {
+                remote.displayName.ifBlank { displayName(settings, AuthService.email()) }
+            } else {
+                displayName(settings, AuthService.email())
+            }
 
             if (localTags.isEmpty()) {
                 if (remote == null) {

@@ -508,6 +508,38 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(2.dp))
                 if (auth.signedIn) {
+                    // The ranks name lives with the account: set it once at
+                    // sign-up, edit it here.
+                    var rankName by remember(settings.displayName) {
+                        mutableStateOf(
+                            settings.displayName.ifBlank {
+                                LeaderboardService.displayName(settings, auth.email)
+                            }
+                        )
+                    }
+                    GritField(
+                        value = rankName,
+                        onValueChange = { rankName = it.take(32) },
+                        caption = "Display name",
+                        placeholder = "Shown on the focus ranks",
+                        symbol = "person",
+                        trailing = {
+                            GritButton(
+                                label = "Save",
+                                onClick = {
+                                    StoreRepository.setDisplayName(rankName)
+                                    scope.launch {
+                                        LeaderboardService.publish()
+                                        delay(600)
+                                        LeaderboardService.refresh()
+                                    }
+                                },
+                                symbol = "check",
+                                style = GritButtonStyle.TONAL
+                            )
+                        }
+                    )
+                    Spacer(Modifier.height(6.dp))
                     SettingsRow(
                         symbol = "person",
                         title = auth.email.ifBlank { "Signed in" },
@@ -522,6 +554,14 @@ fun SettingsScreen(
                         }
                     )
                 } else {
+                    var signUpName by remember { mutableStateOf("") }
+                    GritField(
+                        value = signUpName,
+                        onValueChange = { signUpName = it.take(32) },
+                        caption = "Display name",
+                        placeholder = "Shown on the focus ranks",
+                        symbol = "person"
+                    )
                     GritField(
                         value = emailInput,
                         onValueChange = { emailInput = it },
@@ -576,6 +616,9 @@ fun SettingsScreen(
                             onClick = {
                                 scope.launch {
                                     if (AuthService.createAccount(emailInput, passwordInput)) {
+                                        if (signUpName.isNotBlank()) {
+                                            StoreRepository.setDisplayName(signUpName.trim().take(32))
+                                        }
                                         passwordInput = ""
                                         FirestoreSync.syncNow(silent = false)
                                         LeaderboardService.publish()

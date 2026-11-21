@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -66,7 +65,6 @@ import com.gritnative.app.data.activeTags
 import com.gritnative.app.data.formatMinutesShort
 import com.gritnative.app.ui.components.CardHeader
 import com.gritnative.app.ui.components.FormChip
-import com.gritnative.app.ui.components.GritField
 import com.gritnative.app.ui.components.GritPanel
 import com.gritnative.app.ui.components.ProgressLine
 import com.gritnative.app.ui.components.RoundIconButton
@@ -123,13 +121,6 @@ fun RanksScreen(
     val state by LeaderboardService.state.collectAsState()
     val scope = rememberCoroutineScope()
     var periodName by rememberSaveable { mutableStateOf(LeaderboardPeriod.WEEK.name) }
-    var displayName by remember(settings.displayName) {
-        mutableStateOf(
-            settings.displayName.ifBlank {
-                LeaderboardService.displayName(settings, AuthService.email())
-            }
-        )
-    }
     val period = LeaderboardPeriod.entries.firstOrNull { it.name == periodName }
         ?: LeaderboardPeriod.WEEK
 
@@ -265,33 +256,16 @@ fun RanksScreen(
         }
 
         item(key = "tags") {
+            // The refresh runs quietly in the background; only a real error
+            // ever shows up here.
             StaggeredEntry(2) {
-                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    AnimatedVisibility(visible = state.loading) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(7.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(13.dp),
-                                strokeWidth = 1.8.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "Listening to the other devices…",
-                                color = Grit.colors.subtext,
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
-                    AnimatedVisibility(visible = state.error.isNotBlank()) {
-                        Text(
-                            text = state.error,
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 10.sp,
-                            lineHeight = 13.sp
-                        )
-                    }
+                AnimatedVisibility(visible = state.error.isNotBlank()) {
+                    Text(
+                        text = state.error,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 10.sp,
+                        lineHeight = 13.sp
+                    )
                 }
             }
         }
@@ -415,48 +389,8 @@ fun RanksScreen(
         }
 
         if (signedIn) {
-            item(key = "your-name") {
-                StaggeredEntry(4) {
-                    GritPanel {
-                        CardHeader(
-                            title = "How you appear",
-                            subtitle = "A display name for the ranks. Your email is never published."
-                        )
-                        Spacer(Modifier.height(9.dp))
-                        Row(
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            GritField(
-                                value = displayName,
-                                onValueChange = { displayName = it.take(32) },
-                                caption = "Display name",
-                                placeholder = "Your name",
-                                symbol = "person",
-                                modifier = Modifier.weight(1f)
-                            )
-                            androidx.compose.material3.Button(
-                                onClick = {
-                                    StoreRepository.setDisplayName(displayName)
-                                    scope.launch {
-                                        LeaderboardService.publish()
-                                        delay(600)
-                                        LeaderboardService.refresh()
-                                    }
-                                },
-                                modifier = Modifier.height(58.dp),
-                                shape = CircleShape,
-                                contentPadding = PaddingValues(horizontal = 16.dp)
-                            ) {
-                                Text("Save", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-
             item(key = "public-tags") {
-                StaggeredEntry(5) {
+                StaggeredEntry(4) {
                     GritPanel {
                         CardHeader(
                             title = "Public tags",

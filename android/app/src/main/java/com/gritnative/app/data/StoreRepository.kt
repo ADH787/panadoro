@@ -390,7 +390,10 @@ object StoreRepository {
 
     fun setDisplayName(value: String) {
         val clean = value.trim().take(40)
-        if (clean == _settings.value.displayName) return
+        // An explicit save always re-stamps, even when the name is unchanged.
+        // If the board row was ever reverted by another client, this is what
+        // lets the user win it back: the fresh timestamp beats the carried
+        // stale one everywhere.
         val now = System.currentTimeMillis()
         prefs.putString(PREF_DISPLAY_NAME, clean)
         prefs.putString(PREF_DISPLAY_NAME_AT, now.toString())

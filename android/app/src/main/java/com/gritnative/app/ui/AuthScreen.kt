@@ -9,10 +9,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -68,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import com.gritnative.app.data.AuthService
 import com.gritnative.app.data.FirestoreSync
 import com.gritnative.app.data.LeaderboardService
+import com.gritnative.app.data.StoreRepository
 import com.gritnative.app.ui.components.AmbientBackdrop
 import com.gritnative.app.ui.components.EntranceWindow
 import com.gritnative.app.ui.components.GritField
@@ -92,6 +95,7 @@ fun AuthScreen(
     val auth by AuthService.state.collectAsState()
     val scope = rememberCoroutineScope()
     var creating by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
@@ -125,6 +129,12 @@ fun AuthScreen(
                 AuthService.signIn(email, password)
             }
             if (ok) {
+                if (creating && name.isNotBlank()) {
+                    // Saved before the first sync and publish, so the board's
+                    // first glimpse of this account already carries the
+                    // chosen name.
+                    StoreRepository.setDisplayName(name.trim().take(32))
+                }
                 password = ""
                 FirestoreSync.syncNow(silent = true)
                 LeaderboardService.publish()
@@ -235,6 +245,26 @@ fun AuthScreen(
                                     lineHeight = 16.sp
                                 )
                             }
+                        }
+
+                        AnimatedVisibility(
+                            visible = creating,
+                            enter = fadeIn(tween(200)) +
+                                expandVertically(tween(240, easing = FastOutSlowInEasing)),
+                            exit = fadeOut(tween(140)) +
+                                shrinkVertically(tween(180, easing = FastOutSlowInEasing))
+                        ) {
+                            GritField(
+                                value = name,
+                                onValueChange = { name = it.take(32) },
+                                caption = "Display name",
+                                placeholder = "Shown on the focus ranks",
+                                symbol = "person",
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.Next
+                                )
+                            )
                         }
 
                         GritField(

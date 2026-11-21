@@ -969,4 +969,5 @@ internal val ARABIC_STRINGS: Map<String, String> = mapOf(
     "Wed" to "الأربعاء",
     "Fri" to "الجمعة",
     "Sat" to "السبت",
+    "Shown on the focus ranks" to "يظهر في ترتيب التركيز",
 )
