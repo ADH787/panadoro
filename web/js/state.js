@@ -346,6 +346,63 @@ function normalizeTag(item) {
   return tag;
 }
 
+function normalizeLeaderboardPrefs(raw) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  return {
+    displayName: String(data.displayName ?? "").trim().slice(0, 40),
+    nameUpdatedAt: Number(data.nameUpdatedAt ?? 0) || 0,
+    publicTagIds: Array.isArray(data.publicTagIds) ? data.publicTagIds.map(String) : [],
+    tagsUpdatedAt: Number(data.tagsUpdatedAt ?? 0) || 0,
+    updatedAt: Number(data.updatedAt ?? 0) || 0,
+  };
+}
+
+export function leaderboardFromSettings() {
+  const nameAt = Number(S.settings.displayNameUpdatedAt ?? 0) || 0;
+  const tagsAt = Number(S.settings.publicTagsUpdatedAt ?? 0) || 0;
+  return {
+    displayName: String(S.settings.displayName ?? "").trim().slice(0, 40),
+    nameUpdatedAt: nameAt,
+    publicTagIds: [...S.settings.publicTagIds],
+    tagsUpdatedAt: tagsAt,
+    updatedAt: Math.max(nameAt, tagsAt),
+  };
+}
+
+export function mergeLeaderboardPrefs(local, remote) {
+  const a = normalizeLeaderboardPrefs(local);
+  const b = normalizeLeaderboardPrefs(remote);
+  if (!remote) return a;
+  const nameAt = Math.max(a.nameUpdatedAt, b.nameUpdatedAt);
+  const tagsAt = Math.max(a.tagsUpdatedAt, b.tagsUpdatedAt);
+  return {
+    displayName: b.nameUpdatedAt > a.nameUpdatedAt ? b.displayName : a.displayName,
+    nameUpdatedAt: nameAt,
+    publicTagIds: b.tagsUpdatedAt > a.tagsUpdatedAt ? b.publicTagIds : a.publicTagIds,
+    tagsUpdatedAt: tagsAt,
+    updatedAt: Math.max(a.updatedAt, b.updatedAt, nameAt, tagsAt),
+  };
+}
+
+export function applyLeaderboardPrefs(prefs) {
+  const value = normalizeLeaderboardPrefs(prefs);
+  const nameAt = Number(S.settings.displayNameUpdatedAt ?? 0) || 0;
+  const tagsAt = Number(S.settings.publicTagsUpdatedAt ?? 0) || 0;
+  let changed = false;
+  if (value.nameUpdatedAt > nameAt) {
+    S.settings.displayName = value.displayName;
+    S.settings.displayNameUpdatedAt = value.nameUpdatedAt;
+    changed = true;
+  }
+  if (value.tagsUpdatedAt > tagsAt) {
+    S.settings.publicTagIds = value.publicTagIds;
+    S.settings.publicTagsUpdatedAt = value.tagsUpdatedAt;
+    changed = true;
+  }
+  if (changed) persistSettings();
+  return changed;
+}
+
 export function normalizeStore(raw) {
   const data = raw && typeof raw === "object" ? raw : {};
   return {
@@ -361,6 +418,7 @@ export function normalizeStore(raw) {
       : defaultTags(),
     focusSessions: sortSessions(dedupeList(data.focusSessions)),
     timer: data.timer && typeof data.timer === "object" ? data.timer : null,
+    leaderboard: normalizeLeaderboardPrefs(data.leaderboard),
     updatedAt: Number(data.updatedAt ?? 0) || 0,
     device: String(data.device ?? ""),
   };
@@ -376,6 +434,7 @@ export function emptyStore() {
     tags: defaultTags(),
     focusSessions: [],
     timer: null,
+    leaderboard: leaderboardFromSettings(),
     updatedAt: Date.now(),
     device: deviceId,
   };
@@ -391,12 +450,14 @@ export function snapshot() {
     tags: S.data.tags,
     focusSessions: S.data.focusSessions,
     timer: S.data.timer,
+    leaderboard: leaderboardFromSettings(),
     updatedAt: Date.now(),
     device: deviceId,
   };
 }
 
 if (!S.data) S.data = emptyStore();
+applyLeaderboardPrefs(S.data.leaderboard);
 
 export function ensureDefaults() {
   if (!S.data.timer) ensureTimer();
@@ -444,6 +505,7 @@ export function mergeStores(local, remote) {
     tags: mergeRecordLists(a.tags, b.tags),
     focusSessions: sortSessions(mergeRecordLists(a.focusSessions, b.focusSessions)),
     timer: a.timer,
+    leaderboard: mergeLeaderboardPrefs(a.leaderboard, b.leaderboard),
     updatedAt: Date.now(),
     device: deviceId,
   };
@@ -476,6 +538,7 @@ export function applyRemoteStore(payload) {
   S.sync.applying = true;
   const merged = mergeStores(snapshot(), payload);
   S.data = normalizeStore(merged);
+  applyLeaderboardPrefs(S.data.leaderboard);
   ensureTimer();
   S.sync.applying = false;
   saveSoon();
@@ -1516,7 +1579,9 @@ export function setTagPublic(tagId, isPublic) {
   if (isPublic) next.push(id);
   S.settings.publicTagIds = next;
   S.settings.publicTagsUpdatedAt = Date.now();
+  S.data.leaderboard = leaderboardFromSettings();
   saveSettings();
+  saveSoon();
 }
 
 export function setDisplayName(value) {
@@ -1524,7 +1589,9 @@ export function setDisplayName(value) {
   if (clean === S.settings.displayName) return;
   S.settings.displayName = clean;
   S.settings.displayNameUpdatedAt = Date.now();
+  S.data.leaderboard = leaderboardFromSettings();
   saveSettings();
+  saveSoon();
 }
 
 /**
@@ -1551,7 +1618,11 @@ export function adoptLeaderboardSettings({
     S.settings.publicTagIds = next;
     S.settings.publicTagsUpdatedAt = Number(tagsUpdatedAt);
   }
-  if (changed) saveSettings();
+  if (changed) {
+    S.data.leaderboard = leaderboardFromSettings();
+    saveSettings();
+    saveSoon();
+  }
 }
 
 /* ── Reset / export ──────────────────────────────────────────────────── */

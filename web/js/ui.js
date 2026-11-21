@@ -98,7 +98,7 @@ import {
   timerProgress,
   timerRunning,
   timerSecondsLeft,
-} from "./state.js?v=1.8.3";
+} from "./state.js?v=1.9.1";
 
 import {
   clearAuthError,
@@ -109,12 +109,12 @@ import {
   signIn,
   signOut,
   syncNow,
-} from "./cloud.js?v=1.8.3";
-import { ICONS } from "./icons.js?v=1.8.3";
-import morphdom from "./vendor/morphdom.js?v=1.8.3";
-import { applyLanguage, currentLanguage, isRTL, setLanguage, translateDOM, translateText } from "./i18n.js?v=1.8.3";
+} from "./cloud.js?v=1.9.1";
+import { ICONS } from "./icons.js?v=1.9.1";
+import morphdom from "./vendor/morphdom.js?v=1.9.1";
+import { applyLanguage, currentLanguage, isRTL, setLanguage, translateDOM, translateText } from "./i18n.js?v=1.9.1";
 
-const WEB_VERSION = document.querySelector('meta[name="app-version"]')?.content || "1.8.3";
+const WEB_VERSION = document.querySelector('meta[name="app-version"]')?.content || "1.9.1";
 
 const TABS = [
   { id: "today", label: "Today", icon: "sun" },
