@@ -9,6 +9,16 @@
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./assets/app.css">
+  <script>
+    try {
+      const stored = JSON.parse(localStorage.getItem("panadoro.settings.v1") || "{}");
+      const dark = stored.theme === "dark" || ((!stored.theme || stored.theme === "system") && matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+      const lang = stored.language === "ar" || (!stored.language && navigator.language.toLowerCase().startsWith("ar")) ? "ar" : "en";
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    } catch (_) {}
+  </script>
 </head>
 <body>
   <div id="app">
