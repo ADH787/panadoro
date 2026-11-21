@@ -98,7 +98,7 @@ import {
   timerProgress,
   timerRunning,
   timerSecondsLeft,
-} from "./state.js";
+} from "./state.js?v=1.8.3";
 
 import {
   clearAuthError,
@@ -109,10 +109,12 @@ import {
   signIn,
   signOut,
   syncNow,
-} from "./cloud.js";
-import { ICONS } from "./icons.js";
-import morphdom from "./vendor/morphdom.js";
-import { applyLanguage, currentLanguage, isRTL, setLanguage, translateDOM, translateText } from "./i18n.js";
+} from "./cloud.js?v=1.8.3";
+import { ICONS } from "./icons.js?v=1.8.3";
+import morphdom from "./vendor/morphdom.js?v=1.8.3";
+import { applyLanguage, currentLanguage, isRTL, setLanguage, translateDOM, translateText } from "./i18n.js?v=1.8.3";
+
+const WEB_VERSION = document.querySelector('meta[name="app-version"]')?.content || "1.8.3";
 
 const TABS = [
   { id: "today", label: "Today", icon: "sun" },
@@ -1282,6 +1284,7 @@ function settingsPage() {
         <div class="inline-actions">
           <button class="btn tonal" data-action="export-data">${icon("download")} Export JSON</button>
           <button class="btn ghost" data-action="import-data">${icon("upload")} Import JSON</button>
+          <button class="btn ghost" data-action="hard-reload">${icon("refresh")} Reload fresh</button>
           <button class="btn ${resetArmed ? "danger" : "ghost"}" data-action="reset-data">${icon(resetArmed ? "warning" : "reset")} ${resetArmed ? "Press again to erase" : "Reset…"}</button>
           <input id="import-file" type="file" accept="application/json" hidden>
         </div>
@@ -1291,7 +1294,7 @@ function settingsPage() {
       <div class="panel">
         <div class="row" style="gap:12px">
           <div class="habit-icon" style="width:48px;height:48px;border-radius:17px" ${shapeStyle("Cookie12Sided")}>${icon("flame")}</div>
-          <div><h3>Panadoro × Tomato</h3><p class="muted" style="font-size:10.5px">Habits, tasks and tagged focus in one quiet place</p></div>
+          <div><h3>Panadoro × Tomato</h3><p class="muted" style="font-size:10.5px">Habits, tasks and tagged focus · web ${WEB_VERSION}</p></div>
         </div>
         <p class="muted" style="font-size:10.5px;margin-top:10px;line-height:1.5">
           The web app reads the same private Firestore document as the Android and Quickshell apps, merging record by record. The public board is a separate, opt-in tag mirror.
@@ -1902,6 +1905,17 @@ export function bindEvents() {
         break;
       case "export-data": exportData(); toast("Snapshot exported"); break;
       case "import-data": $("#import-file")?.click(); break;
+      case "hard-reload":
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        } catch (_) {}
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((key) => caches.delete(key)));
+        } catch (_) {}
+        location.reload();
+        break;
       case "reset-data":
         if (S.ui.resetArmed) {
           S.ui.resetArmed = false;

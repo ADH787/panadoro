@@ -14,6 +14,7 @@ import {
   effectiveDisplayName,
   emit,
   normalizeStore,
+  persistSettings,
   publicLeaderboardTags,
   saveSettings,
   snapshot,
@@ -21,7 +22,7 @@ import {
   syncSignature,
   thisWeekDays,
   todayKey,
-} from "./state.js";
+} from "./state.js?v=1.8.3";
 
 const PROJECT = "habit-tracker-bd354";
 const API_KEY = "AIzaSyAc97ILytNHNXRbS_EapcllNLd1CcaoLPo";
@@ -303,10 +304,10 @@ function parsePrivateDocument(document) {
 
 export function syncSoon() {
   window.clearTimeout(syncTimer);
-  syncTimer = window.setTimeout(() => syncNow(), 700);
+  syncTimer = window.setTimeout(() => syncNow(true), 700);
 }
 
-export async function syncNow() {
+export async function syncNow(quiet = false) {
   if (!S.auth.signedIn) {
     S.sync.status = "off";
     S.sync.message = "Sign in to sync";
@@ -314,11 +315,14 @@ export async function syncNow() {
     return false;
   }
   if (syncPromise) return syncPromise;
+  const before = S.sync.status;
   syncPromise = (async () => {
     S.sync.inProgress = true;
-    S.sync.status = "syncing";
-    S.sync.message = "Contacting Firebase…";
-    setCloudState();
+    if (!quiet) {
+      S.sync.status = "syncing";
+      S.sync.message = "Contacting Firebase…";
+      setCloudState();
+    }
     try {
       if (!(await ensureFreshToken())) {
         S.sync.status = "error";
@@ -333,7 +337,7 @@ export async function syncNow() {
           },
         });
         if (pulled.status === 404) {
-          const pushed = await pushPrivate("", 0);
+          const pushed = await pushPrivate("", 0, quiet);
           if (pushed === "conflict") continue;
           return pushed === true;
         }
@@ -350,11 +354,11 @@ export async function syncNow() {
           const remoteSignature = syncSignature(remote.payload);
           applyRemoteStore(remote.payload);
           if (remoteSignature === syncSignature(snapshot())) {
-            finishSync(remote.revision);
+            finishSync(remote.revision, quiet);
             return true;
           }
         }
-        const pushed = await pushPrivate(remote.updateTime, remote.revision);
+        const pushed = await pushPrivate(remote.updateTime, remote.revision, quiet);
         if (pushed === "conflict") continue;
         return pushed === true;
       }
@@ -368,13 +372,13 @@ export async function syncNow() {
     } finally {
       S.sync.inProgress = false;
       syncPromise = null;
-      setCloudState();
+      if (!quiet || before !== S.sync.status) setCloudState();
     }
   })();
   return syncPromise;
 }
 
-async function pushPrivate(updateTime, baseRevision) {
+async function pushPrivate(updateTime, baseRevision, quiet = false) {
   const revision = Number(baseRevision ?? 0) + 1;
   const body = {
     fields: {
@@ -400,7 +404,7 @@ async function pushPrivate(updateTime, baseRevision) {
   });
   if (pushed.ok) {
     const result = pushed.data ?? {};
-    finishSync(firestoreInt(result.fields ?? {}, "revision") || revision);
+    finishSync(firestoreInt(result.fields ?? {}, "revision") || revision, quiet);
     return true;
   }
   if (isConflict(pushed.status, pushed.text)) return "conflict";
@@ -412,14 +416,15 @@ async function pushPrivate(updateTime, baseRevision) {
   return false;
 }
 
-function finishSync(revision) {
+function finishSync(revision, quiet = false) {
   S.sync.status = "synced";
   S.sync.message = `Synced ${new Date().toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   })}`;
   S.settings.lastSyncAt = new Date().toLocaleString();
-  saveSettings();
+  if (quiet) persistSettings();
+  else saveSettings();
 }
 
 /* ── Leaderboard ────────────────────────────────────────────────────── */
@@ -485,7 +490,7 @@ function adoptFromBoard(board) {
   });
 }
 
-export async function refreshLeaderboard() {
+export async function refreshLeaderboard(quiet = false) {
   if (!S.auth.signedIn) {
     S.board = {
       entries: [],
@@ -502,9 +507,11 @@ export async function refreshLeaderboard() {
     setCloudState();
     return false;
   }
-  S.board.loading = true;
-  S.board.error = "";
-  setCloudState();
+  if (!quiet) {
+    S.board.loading = true;
+    S.board.error = "";
+    setCloudState();
+  }
   try {
     const response = await request(`${boardUrl()}&pageSize=300`, {
       headers: {
@@ -526,6 +533,8 @@ export async function refreshLeaderboard() {
       const entry = parseBoardDocument(document);
       if (entry) entries.push(entry);
     }
+    const signature = JSON.stringify(entries);
+    const changedBoard = signature !== JSON.stringify(S.board.entries);
     S.board = {
       entries,
       loading: false,
@@ -534,7 +543,7 @@ export async function refreshLeaderboard() {
     };
     const own = entries.find((entry) => entry.uid === S.auth.uid);
     if (own) adoptFromBoard(own);
-    setCloudState();
+    if (!quiet || changedBoard || S.board.error) setCloudState();
     return true;
   } catch (_) {
     S.board.loading = false;
@@ -774,7 +783,7 @@ export function initCloud() {
   });
 
   window.setInterval(() => {
-    if (S.auth.signedIn && S.settings.autoSync) syncNow();
+    if (S.auth.signedIn && S.settings.autoSync) syncNow(true);
   }, 5000);
 
   window.setInterval(() => {

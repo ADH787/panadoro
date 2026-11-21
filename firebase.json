@@ -2,7 +2,22 @@
   "hosting": {
     "site": "panadoro",
     "public": "web",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**/*",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, max-age=0"
+          }
+        ]
+      }
+    ]
   },
   "firestore": {
     "database": "default",

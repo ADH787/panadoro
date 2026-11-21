@@ -144,6 +144,10 @@ export function saveSettings() {
   emit("settings");
 }
 
+export function persistSettings() {
+  writeJson(SETTINGS_KEY, S.settings);
+}
+
 export function setSetting(name, value) {
   S.settings[name] = value;
   saveSettings();

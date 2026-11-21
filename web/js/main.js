@@ -9,9 +9,9 @@ import {
   subscribe,
   tickTimer,
   todayKey,
-} from "./state.js";
-import { initCloud, refreshLeaderboard } from "./cloud.js";
-import { applyTheme, bindEvents, render } from "./ui.js";
+} from "./state.js?v=1.8.3";
+import { initCloud, refreshLeaderboard } from "./cloud.js?v=1.8.3";
+import { applyTheme, bindEvents, render } from "./ui.js?v=1.8.3";
 
 const params = new URLSearchParams(location.search);
 if (params.get("static") === "1") document.documentElement.dataset.static = "true";
@@ -50,7 +50,7 @@ window.setInterval(() => {
   if (S.ui.settingsOpen || S.ui.tab !== "ranks") return;
   if (Date.now() - lastBoardRefresh < 60000) return;
   lastBoardRefresh = Date.now();
-  refreshLeaderboard();
+  refreshLeaderboard(true);
 }, 5000);
 
 window.addEventListener("visibilitychange", () => {
@@ -60,7 +60,7 @@ window.addEventListener("visibilitychange", () => {
     // Catch up on time spent in another tab and refresh the board if visible.
     tickTimer();
     if (S.auth.signedIn && S.ui.tab === "ranks" && !S.ui.settingsOpen)
-      refreshLeaderboard();
+      refreshLeaderboard(true);
   }
 });
 
@@ -70,8 +70,3 @@ if (S.auth.signedIn) {
   refreshLeaderboard();
 }
 
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  });
-}

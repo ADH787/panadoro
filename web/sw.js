@@ -1,62 +1,19 @@
-const CACHE = "panadoro-web-v8";
-const SHELL = [
-  "./",
-  "./index.html",
-  "./assets/app.css",
-  "./assets/icon.svg",
-  "./js/main.js",
-  "./js/state.js",
-  "./js/cloud.js",
-  "./js/ui.js",
-  "./js/i18n.js",
-  "./js/i18n-ar.js",
-  "./js/icons.js",
-  "./js/vendor/morphdom.js",
-  "./manifest.webmanifest",
-];
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).catch(() => {}));
-  self.skipWaiting();
-});
+// This file exists only to retire the old cache-first service worker.
+// It clears every Cache Storage entry, unregisters itself and reloads the app.
+self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  const url = new URL(event.request.url);
-  if (url.origin !== location.origin) return;
-
-  if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put("./index.html", copy)).catch(() => {});
-          return response;
-        })
-        .catch(() => caches.match("./index.html"))
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: "window" });
+      for (const client of clients) {
+        try {
+          client.navigate(client.url);
+        } catch (_) {}
+      }
+    })()
   );
 });

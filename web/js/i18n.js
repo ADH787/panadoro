@@ -2,8 +2,8 @@
 // post-render pass applies the selected language, so no component has to carry
 // two copies of every sentence.
 
-import { AR } from "./i18n-ar.js";
-import { S, saveSettings, emit } from "./state.js";
+import { AR } from "./i18n-ar.js?v=1.8.3";
+import { S, saveSettings, emit } from "./state.js?v=1.8.3";
 
 export const LANGUAGES = [
   { id: "en", label: "English" },
@@ -110,6 +110,7 @@ const EXTRA_AR = {
   "Ready to sync": "جاهز للمزامنة",
   "Waiting for the first sync.": "بانتظار أول مزامنة.",
   "No public tags yet.": "لا توجد وسوم عامة بعد.",
+  "Reload fresh": "إعادة تحميل حديثة",
   "Good morning.": "صباح الخير.",
   "Good afternoon.": "مساء الخير.",
   "Good evening.": "مساء الخير.",
