@@ -1,7 +1,15 @@
 package com.gritnative.app.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +34,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.gritnative.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -403,9 +413,8 @@ private fun FocusStage(
                 }
             }
 
-            // Keep the decorative shape in the same layout box as the ring so
-            // its centre is the countdown centre, not the centre of the whole
-            // card (which includes the header and controls).
+            // Keep the decorative shape inside the ring's inner circle so its
+            // points never poke over the countdown's edge.
             Box(
                 modifier = Modifier
                     .widthIn(max = 296.dp)
@@ -415,7 +424,7 @@ private fun FocusStage(
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .size(192.dp)
                         .rotate(18f)
                         .background(
                             accent.copy(alpha = 0.10f),
@@ -487,23 +496,57 @@ private fun FocusStage(
                     container = onContainer.copy(alpha = 0.12f),
                     content = onContainer
                 )
+                // The play/pause button bounces once on every toggle and the
+                // glyph itself spins across the change.
+                val buttonPulse = remember { Animatable(1f) }
+                LaunchedEffect(running) {
+                    buttonPulse.snapTo(0.86f)
+                    buttonPulse.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 380f))
+                }
                 Surface(
                     onClick = {
                         StoreRepository.ensureTimer()
                         StoreRepository.toggleTimer()
                     },
-                    modifier = Modifier.size(74.dp),
+                    modifier = Modifier
+                        .size(74.dp)
+                        .scale(buttonPulse.value),
                     shape = CircleShape,
                     color = accent,
                     contentColor = mostReadable(accent, listOf(Color.White, Color(0xFF17130F)))
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Symbol(
-                            if (running) "pause" else "play_arrow",
-                            size = 34.dp,
-                            filled = true,
-                            color = mostReadable(accent, listOf(Color.White, Color(0xFF17130F)))
-                        )
+                        // The glyph spins back into place as it swaps between
+                        // the pause bars and the play triangle.
+                        val glyphSpin = remember { Animatable(0f) }
+                        LaunchedEffect(running) {
+                            glyphSpin.snapTo(if (running) 70f else -70f)
+                            glyphSpin.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 380f))
+                        }
+                        Box(Modifier.rotate(glyphSpin.value)) {
+                            AnimatedContent(
+                                targetState = running,
+                                transitionSpec = {
+                                    (
+                                        scaleIn(
+                                            initialScale = 0.4f,
+                                            animationSpec = spring(dampingRatio = 0.55f, stiffness = 380f)
+                                        ) + fadeIn(tween(160))
+                                        ).togetherWith(
+                                        scaleOut(targetScale = 0.4f, animationSpec = tween(150)) +
+                                            fadeOut(tween(90))
+                                    )
+                                },
+                                label = "play-pause"
+                            ) { isRunning ->
+                                Symbol(
+                                    if (isRunning) "pause" else "play_arrow",
+                                    size = 34.dp,
+                                    filled = true,
+                                    color = mostReadable(accent, listOf(Color.White, Color(0xFF17130F)))
+                                )
+                            }
+                        }
                     }
                 }
                 RoundIconButton(
@@ -591,7 +634,6 @@ private fun TagTodoCard(
                 lerpColor(MaterialTheme.colorScheme.surfaceContainerLow, colors.accent, 0.055f),
                 RoundedCornerShape(24.dp)
             )
-            .border(1.dp, colors.accent.copy(alpha = 0.16f), RoundedCornerShape(24.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {

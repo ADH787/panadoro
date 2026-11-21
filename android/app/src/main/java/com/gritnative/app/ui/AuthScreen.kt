@@ -16,7 +16,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,9 +41,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.gritnative.app.ui.components.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,7 +69,9 @@ import com.gritnative.app.data.AuthService
 import com.gritnative.app.data.FirestoreSync
 import com.gritnative.app.data.LeaderboardService
 import com.gritnative.app.ui.components.AmbientBackdrop
+import com.gritnative.app.ui.components.EntranceWindow
 import com.gritnative.app.ui.components.GritField
+import com.gritnative.app.ui.components.LocalEntranceWindow
 import com.gritnative.app.ui.components.RoundIconButton
 import com.gritnative.app.ui.components.ShapeBadge
 import com.gritnative.app.ui.components.StaggeredEntry
@@ -143,7 +145,10 @@ fun AuthScreen(
             third = MaterialTheme.colorScheme.secondary
         )
 
-        Column(
+        CompositionLocalProvider(
+            LocalEntranceWindow provides remember { EntranceWindow() }
+        ) {
+            Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
@@ -197,10 +202,6 @@ fun AuthScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(32.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.94f),
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-                    ),
                     shadowElevation = 18.dp
                 ) {
                     Column(
@@ -397,6 +398,7 @@ fun AuthScreen(
                 )
             }
             Spacer(Modifier.height(18.dp))
+        }
         }
     }
 }

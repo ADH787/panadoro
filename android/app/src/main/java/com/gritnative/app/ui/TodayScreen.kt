@@ -21,14 +21,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.gritnative.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,7 +70,6 @@ import com.gritnative.app.ui.components.WavyRing
 import com.gritnative.app.ui.theme.Grit
 import com.gritnative.app.ui.theme.Symbol
 import com.gritnative.app.ui.theme.categoryColors
-import com.gritnative.app.ui.theme.gritShape
 import com.gritnative.app.ui.theme.tagColors
 import java.time.LocalTime
 import kotlin.math.roundToInt
@@ -184,7 +181,7 @@ fun TodayScreen(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "Today",
+                    text = "Habits",
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 22.sp,
@@ -343,14 +340,6 @@ private fun TodayHero(
             .clip(shape)
             .background(container)
     ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 34.dp, y = (-38).dp)
-                .size(148.dp)
-                .rotate(16f)
-                .background(accent.copy(alpha = 0.09f), gritShape("Cookie12Sided"))
-        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()

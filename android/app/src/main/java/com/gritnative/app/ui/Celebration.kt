@@ -25,14 +25,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.gritnative.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,7 +42,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -57,7 +56,6 @@ import com.gritnative.app.ui.components.GritButton
 import com.gritnative.app.ui.components.GritButtonStyle
 import com.gritnative.app.ui.components.ShapeBadge
 import com.gritnative.app.ui.theme.Grit
-import com.gritnative.app.ui.theme.gritShape
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.cos
@@ -176,29 +174,14 @@ fun CelebrationOverlay(
                 exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.9f, animationSpec = tween(180))
             ) {
                 Box(modifier = Modifier.widthIn(max = 400.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .offset(x = (-18).dp, y = (-16).dp)
-                            .size(40.dp)
-                            .rotate(20f + 8f * burst.value)
-                            .background(accent.copy(alpha = 0.32f), gritShape("Cookie4Sided"))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .offset(x = 20.dp, y = 18.dp)
-                            .size(50.dp)
-                            .rotate(-18f - 10f * burst.value)
-                            .background(accent.copy(alpha = 0.2f), gritShape("Flower"))
-                    )
-
+                    // A wide card keeps a calm rounded silhouette: the expressive
+                    // polygons are normalised for square badges and stretch into
+                    // spikes across a card this wide.
                     Surface(
-                        shape = gritShape("Cookie12Sided"),
+                        shape = RoundedCornerShape(34.dp),
                         color = container,
                         contentColor = onContainer,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
-                        shadowElevation = 24.dp
+                        shadowElevation = 20.dp
                     ) {
                         Column(
                             modifier = Modifier

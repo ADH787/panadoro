@@ -35,7 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
+import com.gritnative.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -581,10 +581,7 @@ private fun PodiumCard(
         modifier = modifier.height(height),
         shape = RoundedCornerShape(22.dp),
         color = lerpColor(MaterialTheme.colorScheme.surfaceContainerLow, medal, 0.08f),
-        border = BorderStroke(
-            if (isYou) 1.5.dp else 1.dp,
-            if (isYou) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else medal.copy(alpha = 0.34f)
-        ),
+        border = if (isYou) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)) else null,
         shadowElevation = if (rank == 1) 8.dp else 0.dp
     ) {
         Column(

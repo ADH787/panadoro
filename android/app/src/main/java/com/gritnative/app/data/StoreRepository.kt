@@ -1,7 +1,11 @@
 package com.gritnative.app.data
 
 import android.content.Context
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +48,8 @@ object StoreRepository {
     private const val STORE_FILE = "grit-store.json"
     private const val PREF_DEVICE = "deviceId"
     private const val PREF_THEME = "themeMode"
+    private const val PREF_LANGUAGE = "appLanguage"
+    private const val PREF_COLOR_PROFILE = "colorProfile"
     private const val PREF_DYNAMIC = "dynamicColor"
     private const val PREF_AMOLED = "amoled"
     private const val PREF_WEEK_MONDAY = "weekStartMonday"
@@ -114,6 +120,8 @@ object StoreRepository {
             val settings = AppSettings(
                 deviceId = id,
                 themeMode = theme,
+                language = prefs.getString(PREF_LANGUAGE, "system"),
+                colorProfile = prefs.getString(PREF_COLOR_PROFILE, "dynamic"),
                 dynamicColor = prefs.getBool(PREF_DYNAMIC, true),
                 amoled = prefs.getBool(PREF_AMOLED, false),
                 weekStartMonday = prefs.getBool(PREF_WEEK_MONDAY, true),
@@ -158,6 +166,7 @@ object StoreRepository {
         val base = parsed?.let { normalizeStore(it, id) } ?: emptyStore(id)
         val withTimer = base.ensureTimer(id)
         synchronized(lock) { _store.value = withTimer }
+        applyLeaderboardPrefs(withTimer.leaderboard)
         if (parsed == null) saveNow()
         if (!loaded.isCompleted) loaded.complete(Unit)
         _ready.value = true
@@ -175,6 +184,7 @@ object StoreRepository {
         try {
             val snapshot = synchronized(lock) {
                 _store.value.ensureTimer(deviceId).copy(
+                    leaderboard = leaderboardFromSettings(),
                     updatedAt = System.currentTimeMillis(),
                     device = deviceId
                 )
@@ -272,6 +282,21 @@ object StoreRepository {
         updateSettings { it.copy(dynamicColor = enabled) }
     }
 
+    fun setLanguage(language: String) {
+        val clean = if (language == "ar" || language == "en") language else "system"
+        prefs.putString(PREF_LANGUAGE, clean)
+        updateSettings { it.copy(language = clean) }
+    }
+
+    fun setColorProfile(profile: String) {
+        val clean = profile.takeIf {
+            it in setOf("dynamic", "forest", "ocean", "amber", "rose", "violet", "slate")
+        } ?: "dynamic"
+        prefs.putString(PREF_COLOR_PROFILE, clean)
+        prefs.putBool(PREF_DYNAMIC, clean == "dynamic")
+        updateSettings { it.copy(colorProfile = clean, dynamicColor = clean == "dynamic") }
+    }
+
     fun setAmoled(enabled: Boolean) {
         prefs.putBool(PREF_AMOLED, enabled)
         updateSettings { it.copy(amoled = enabled) }
@@ -304,6 +329,65 @@ object StoreRepository {
         _syncState.value = _syncState.value.copy(lastSyncAt = value)
     }
 
+    private fun leaderboardFromSettings(settings: AppSettings = _settings.value): LeaderboardPrefs =
+        LeaderboardPrefs(
+            displayName = settings.displayName,
+            nameUpdatedAt = settings.displayNameUpdatedAt,
+            publicTagIds = settings.publicTagIds.toList(),
+            tagsUpdatedAt = settings.publicTagsUpdatedAt,
+            updatedAt = maxOf(settings.displayNameUpdatedAt, settings.publicTagsUpdatedAt)
+        )
+
+    private fun storeWithLeaderboard(store: Store): Store =
+        store.copy(leaderboard = leaderboardFromSettings())
+
+    private fun syncLeaderboardToStore() {
+        if (!initialized) return
+        val now = System.currentTimeMillis()
+        mutate {
+            it.copy(leaderboard = leaderboardFromSettings(), updatedAt = now, device = deviceId)
+        }
+    }
+
+    /**
+     * Adopt synced preferences from the private document (or a leaderboard row)
+     * without letting an older device overwrite a newer local change.
+     */
+    private fun applyLeaderboardPrefs(prefs: LeaderboardPrefs) {
+        val current = _settings.value
+        var name = current.displayName
+        var nameAt = current.displayNameUpdatedAt
+        var ids = current.publicTagIds
+        var tagsAt = current.publicTagsUpdatedAt
+        if (prefs.nameUpdatedAt > nameAt) {
+            name = prefs.displayName.trim().take(40)
+            nameAt = prefs.nameUpdatedAt
+        }
+        if (prefs.tagsUpdatedAt > tagsAt) {
+            ids = prefs.publicTagIds.toSet()
+            tagsAt = prefs.tagsUpdatedAt
+        }
+        if (name == current.displayName && nameAt == current.displayNameUpdatedAt &&
+            ids == current.publicTagIds && tagsAt == current.publicTagsUpdatedAt
+        ) return
+        prefsStore(ids, name, nameAt, tagsAt)
+        updateSettings {
+            it.copy(
+                displayName = name,
+                displayNameUpdatedAt = nameAt,
+                publicTagIds = ids,
+                publicTagsUpdatedAt = tagsAt
+            )
+        }
+    }
+
+    private fun prefsStore(ids: Set<String>, name: String, nameAt: Long, tagsAt: Long) {
+        prefs.putString(PREF_DISPLAY_NAME, name)
+        prefs.putString(PREF_DISPLAY_NAME_AT, nameAt.toString())
+        prefs.putStringSet(PREF_PUBLIC_TAGS, ids)
+        prefs.putString(PREF_PUBLIC_TAGS_AT, tagsAt.toString())
+    }
+
     fun setDisplayName(value: String) {
         val clean = value.trim().take(40)
         if (clean == _settings.value.displayName) return
@@ -311,6 +395,7 @@ object StoreRepository {
         prefs.putString(PREF_DISPLAY_NAME, clean)
         prefs.putString(PREF_DISPLAY_NAME_AT, now.toString())
         updateSettings { it.copy(displayName = clean, displayNameUpdatedAt = now) }
+        syncLeaderboardToStore()
     }
 
     fun setTagPublic(tagId: String, isPublic: Boolean) {
@@ -324,6 +409,7 @@ object StoreRepository {
         prefs.putStringSet(PREF_PUBLIC_TAGS, next)
         prefs.putString(PREF_PUBLIC_TAGS_AT, now.toString())
         updateSettings { it.copy(publicTagIds = next, publicTagsUpdatedAt = now) }
+        syncLeaderboardToStore()
     }
 
     /**
@@ -357,10 +443,7 @@ object StoreRepository {
         ) {
             return
         }
-        prefs.putString(PREF_DISPLAY_NAME, nextName)
-        prefs.putString(PREF_DISPLAY_NAME_AT, nextNameAt.toString())
-        prefs.putStringSet(PREF_PUBLIC_TAGS, nextTags)
-        prefs.putString(PREF_PUBLIC_TAGS_AT, nextTagsAt.toString())
+        prefsStore(nextTags, nextName, nextNameAt, nextTagsAt)
         updateSettings {
             it.copy(
                 displayName = nextName,
@@ -369,6 +452,7 @@ object StoreRepository {
                 publicTagsUpdatedAt = nextTagsAt
             )
         }
+        syncLeaderboardToStore()
     }
 
     fun updateSyncState(state: SyncUiState) {
@@ -932,17 +1016,113 @@ object StoreRepository {
 
     fun snapshotForSync(): Store = synchronized(lock) {
         _store.value.ensureTimer(deviceId).snapshot(deviceId)
+            .copy(leaderboard = leaderboardFromSettings())
     }
 
     fun applyRemoteStore(remote: Store): Store {
         val merged = synchronized(lock) {
-            val next = mergeStores(_store.value, remote, deviceId).ensureTimer(deviceId)
+            val local = storeWithLeaderboard(_store.value)
+            val next = mergeStores(local, remote, deviceId).ensureTimer(deviceId)
             _store.value = next
             next
         }
+        applyLeaderboardPrefs(merged.leaderboard)
         saveSoon()
         dispatchTimer()
         return merged
+    }
+
+    // ── Backup / restore ────────────────────────────────────────────────
+
+    fun exportBackup(uri: Uri) {
+        scope.launch {
+            runCatching {
+                val text = encodeStore(snapshotForSync())
+                appContext.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                    out.write(text.toByteArray(Charsets.UTF_8))
+                } ?: error("Could not open the selected file")
+            }.onSuccess {
+                toast("Backup saved")
+            }.onFailure {
+                Log.w(TAG, "Backup export failed", it)
+                toast("Could not save the backup")
+            }
+        }
+    }
+
+    fun importBackup(uri: Uri) {
+        scope.launch {
+            runCatching {
+                val text = appContext.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes().toString(Charsets.UTF_8)
+                } ?: error("Could not read the selected file")
+                val parsed = normalizeStore(decodeStore(text), deviceId)
+                val now = System.currentTimeMillis()
+                val dev = deviceId
+                val restored = parsed.copy(
+                    habits = restoreRecords(parsed.habits, _store.value.habits, { it.id }, now, dev,
+                        { h, t, d -> h.copy(updatedAt = t, device = d) },
+                        { h, t, d -> h.copy(deleted = true, updatedAt = t, device = d) }),
+                    entries = restoreRecords(parsed.entries, _store.value.entries, { it.id }, now, dev,
+                        { e, t, d -> e.copy(updatedAt = t, device = d) },
+                        { e, t, d -> e.copy(deleted = true, updatedAt = t, device = d) }),
+                    tasks = restoreRecords(parsed.tasks, _store.value.tasks, { it.id }, now, dev,
+                        { task, t, d -> task.copy(updatedAt = t, device = d) },
+                        { task, t, d -> task.copy(deleted = true, updatedAt = t, device = d) }),
+                    categories = restoreRecords(parsed.categories, _store.value.categories, { it.id }, now, dev,
+                        { c, t, d -> c.copy(updatedAt = t, device = d) },
+                        { c, t, d -> c.copy(deleted = true, updatedAt = t, device = d) }),
+                    tags = restoreRecords(parsed.tags, _store.value.tags, { it.id }, now, dev,
+                        { tag, t, d -> tag.copy(updatedAt = t, device = d) },
+                        { tag, t, d -> tag.copy(deleted = true, updatedAt = t, device = d) }),
+                    focusSessions = restoreRecords(parsed.focusSessions, _store.value.focusSessions, { it.id }, now, dev,
+                        { session, t, d -> session.copy(updatedAt = t, device = d) },
+                        { session, t, d -> session.copy(deleted = true, updatedAt = t, device = d) }),
+                    leaderboard = if (parsed.leaderboard.displayName.isNotBlank() ||
+                        parsed.leaderboard.publicTagIds.isNotEmpty()) {
+                        parsed.leaderboard.copy(
+                            nameUpdatedAt = now,
+                            tagsUpdatedAt = now,
+                            updatedAt = now
+                        )
+                    } else {
+                        leaderboardFromSettings()
+                    },
+                    updatedAt = now,
+                    device = dev
+                ).ensureTimer(dev)
+                synchronized(lock) { _store.value = restored }
+                applyLeaderboardPrefs(restored.leaderboard)
+                saveNow()
+                dispatchTimer()
+                FirestoreSync.syncNow(silent = false)
+            }.onSuccess {
+                toast("Backup restored and uploaded to your devices")
+            }.onFailure {
+                Log.w(TAG, "Backup import failed", it)
+                toast("Could not restore that backup")
+            }
+        }
+    }
+
+    private fun <T> restoreRecords(
+        imported: List<T>,
+        current: List<T>,
+        id: (T) -> String,
+        now: Long,
+        device: String,
+        stamp: (T, Long, String) -> T,
+        tombstone: (T, Long, String) -> T
+    ): List<T> {
+        val importedIds = imported.map(id).toHashSet()
+        return imported.map { stamp(it, now, device) } +
+            current.filter { id(it) !in importedIds }.map { tombstone(it, now, device) }
+    }
+
+    private fun toast(message: String) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(appContext, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     // ── Reset ───────────────────────────────────────────────────────────

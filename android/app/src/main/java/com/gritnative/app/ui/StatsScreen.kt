@@ -8,7 +8,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.gritnative.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -680,7 +679,6 @@ fun StatsScreen(
                         lerpColor(MaterialTheme.colorScheme.surfaceContainerLow, colors.accent, 0.055f),
                         RoundedCornerShape(24.dp)
                     )
-                    .border(1.dp, colors.accent.copy(alpha = 0.16f), RoundedCornerShape(24.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {

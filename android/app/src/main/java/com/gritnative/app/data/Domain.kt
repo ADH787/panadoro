@@ -34,6 +34,16 @@ fun newId(prefix: String, deviceId: String, now: Long = System.currentTimeMillis
 
 // ── Dates ────────────────────────────────────────────────────────────────
 
+/**
+ * Mirrors the in-app language so date labels follow it even when the system
+ * locale is different. MainActivity keeps the flag in step with the setting.
+ */
+object AppLocale {
+    @Volatile var isArabic: Boolean = false
+
+    fun current(): Locale = if (isArabic) Locale.forLanguageTag("ar") else Locale.getDefault()
+}
+
 fun dateKey(date: LocalDate = LocalDate.now()): String = date.toString()
 
 fun dateKey(epochMs: Long): String =
@@ -67,12 +77,12 @@ fun relativeDay(key: String, todayKey: String = dateKey()): String = when (key) 
     addDays(todayKey, 1) -> "Tomorrow"
     addDays(todayKey, -1) -> "Yesterday"
     else -> runCatching {
-        dateFromKey(key).format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault()))
+        dateFromKey(key).format(DateTimeFormatter.ofPattern("EEE, d MMM", AppLocale.current()))
     }.getOrDefault(key)
 }
 
 fun weekdayShort(key: String): String = runCatching {
-    dateFromKey(key).format(DateTimeFormatter.ofPattern("EEEEE", Locale.getDefault()))
+    dateFromKey(key).format(DateTimeFormatter.ofPattern("EEEEE", AppLocale.current()))
 }.getOrDefault("")
 
 fun weekdayNarrow(key: String): String = weekdayShort(key)
@@ -195,7 +205,26 @@ fun normalizeStore(raw: Store, deviceId: String): Store {
         tags = normalizeTags(raw.tags),
         focusSessions = normalizeSessions(raw.focusSessions),
         timer = raw.timer,
+        leaderboard = raw.leaderboard,
         device = raw.device.ifBlank { deviceId }
+    )
+}
+
+/** Last-write-wins per preference field, so a stale device cannot undo a newer name or tag list. */
+fun mergeLeaderboardPrefs(
+    local: LeaderboardPrefs,
+    remote: LeaderboardPrefs
+): LeaderboardPrefs {
+    val nameWinsRemote = remote.nameUpdatedAt > local.nameUpdatedAt
+    val tagsWinRemote = remote.tagsUpdatedAt > local.tagsUpdatedAt
+    val nameAt = maxOf(local.nameUpdatedAt, remote.nameUpdatedAt)
+    val tagsAt = maxOf(local.tagsUpdatedAt, remote.tagsUpdatedAt)
+    return LeaderboardPrefs(
+        displayName = if (nameWinsRemote) remote.displayName else local.displayName,
+        nameUpdatedAt = nameAt,
+        publicTagIds = if (tagsWinRemote) remote.publicTagIds else local.publicTagIds,
+        tagsUpdatedAt = tagsAt,
+        updatedAt = maxOf(local.updatedAt, remote.updatedAt, nameAt, tagsAt)
     )
 }
 
@@ -248,6 +277,7 @@ fun mergeStores(
         tags = normalizeTags(mergeRecordLists(a.tags, b.tags, { it.id }, { it.updatedAt }, { it.deleted })),
         focusSessions = normalizeSessions(mergeRecordLists(a.focusSessions, b.focusSessions, { it.id }, { it.updatedAt }, { it.deleted })),
         timer = a.timer,
+        leaderboard = mergeLeaderboardPrefs(a.leaderboard, b.leaderboard),
         updatedAt = now,
         device = deviceId
     )

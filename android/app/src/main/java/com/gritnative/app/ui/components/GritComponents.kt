@@ -45,7 +45,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -96,7 +95,7 @@ import com.gritnative.app.ui.theme.tagColors
 fun GritCard(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.surfaceContainerLow,
-    borderColor: Color? = Grit.colors.outline.copy(alpha = 0.32f),
+    borderColor: Color? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
@@ -156,13 +155,14 @@ fun HeroCard(
             .clip(shape)
             .background(container)
     ) {
+        // A quiet watermark tucked fully inside the card, away from the edges.
         Box(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 0.dp)
-                .size(190.dp)
-                .rotate(18f)
-                .background(accent.copy(alpha = 0.09f), gritShape("Cookie12Sided"))
+                .align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 8.dp)
+                .size(112.dp)
+                .rotate(-14f)
+                .background(accent.copy(alpha = 0.08f), gritShape("Cookie12Sided"))
         )
         Row(
             modifier = Modifier
@@ -375,8 +375,7 @@ fun TagChip(
         modifier = modifier.heightIn(min = 36.dp),
         shape = shape,
         color = container,
-        contentColor = contentColor,
-        border = if (selected) null else BorderStroke(1.dp, colors.accent.copy(alpha = 0.22f))
+        contentColor = contentColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -433,8 +432,7 @@ fun FormChip(
         modifier = modifier,
         shape = CircleShape,
         color = if (selected) accent.copy(alpha = 0.18f) else Grit.colors.field,
-        contentColor = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-        border = if (selected) BorderStroke(1.dp, accent.copy(alpha = 0.45f)) else null
+        contentColor = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
@@ -716,11 +714,6 @@ fun ShapePicker(
                     .size(42.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (active) accent.copy(alpha = 0.16f) else Color.Transparent)
-                    .border(
-                        width = if (active) 1.dp else 0.dp,
-                        color = if (active) accent.copy(alpha = 0.4f) else Color.Transparent,
-                        shape = RoundedCornerShape(12.dp)
-                    )
                     .clickable { onSelect(name) },
                 contentAlignment = Alignment.Center
             ) {
@@ -803,8 +796,7 @@ fun HabitCard(
         onClick = onEdit,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        color = container,
-        border = if (done) null else BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.3f))
+        color = container
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -960,8 +952,7 @@ fun CategoryChip(category: Category, selected: Boolean, onClick: () -> Unit, cou
         onClick = onClick,
         shape = if (selected) RoundedCornerShape(14.dp) else CircleShape,
         color = if (selected) colors.container else Grit.colors.field.copy(alpha = 0.7f),
-        contentColor = if (selected) colors.onContainer else MaterialTheme.colorScheme.onSurface,
-        border = if (selected) null else BorderStroke(1.dp, colors.accent.copy(alpha = 0.2f))
+        contentColor = if (selected) colors.onContainer else MaterialTheme.colorScheme.onSurface
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1128,8 +1119,7 @@ fun SettingsSection(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.25f))
+                color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(
                     modifier = Modifier.padding(8.dp),
@@ -1206,8 +1196,7 @@ fun MiniStatTile(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.24f))
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(modifier = Modifier.padding(11.dp)) {
             ShapeBadge(

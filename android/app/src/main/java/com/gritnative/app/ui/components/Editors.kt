@@ -1,6 +1,5 @@
 package com.gritnative.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +26,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -91,7 +89,7 @@ fun GritSheet(
         sheetState = state,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         scrimColor = Color.Black.copy(alpha = 0.46f),
-        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         dragHandle = { BottomSheetDefaults.DragHandle(color = Grit.colors.outlineStrong.copy(alpha = 0.6f)) }
     ) {
         Column(
@@ -146,8 +144,7 @@ fun IconGrid(
                 shape = if (active) RoundedCornerShape(14.dp) else CircleShape,
                 color = if (active) accent else Grit.colors.field,
                 contentColor = if (active) mostReadable(accent, listOf(Color.White, Color(0xFF17130F)))
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                border = if (active) null else BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.2f))
+                else MaterialTheme.colorScheme.onSurfaceVariant
             ) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Symbol(
@@ -174,7 +171,12 @@ fun DayChips(
     onAccentContainer: Color = MaterialTheme.colorScheme.onPrimaryContainer
 ) {
     val order = listOf(1, 2, 3, 4, 5, 6, 0)
-    val labels = mapOf(1 to "M", 2 to "T", 3 to "W", 4 to "T", 5 to "F", 6 to "S", 0 to "S")
+    // Narrow weekday letters follow the in-app language, not the system one.
+    val labels = if (LocalArabic.current) {
+        mapOf(1 to "ن", 2 to "ث", 3 to "ر", 4 to "خ", 5 to "ج", 6 to "س", 0 to "ح")
+    } else {
+        mapOf(1 to "M", 2 to "T", 3 to "W", 4 to "T", 5 to "F", 6 to "S", 0 to "S")
+    }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -186,8 +188,7 @@ fun DayChips(
                 modifier = Modifier.weight(1f).height(42.dp),
                 shape = RoundedCornerShape(13.dp),
                 color = if (active) accentContainer else Grit.colors.field,
-                contentColor = if (active) onAccentContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                border = if (active) null else BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.18f))
+                contentColor = if (active) onAccentContainer else MaterialTheme.colorScheme.onSurfaceVariant
             ) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(

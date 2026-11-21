@@ -54,7 +54,7 @@ JAVA_HOME=/path/to/jdk17 ./gradlew :app:assembleRelease
 ```
 
 The signed APK is written to `android/app/build/outputs/apk/release/app-release.apk`.
-The current build is `android/panadoro-1.8.apk`.
+The current release is **1.9.2**.
 
 ## Quickshell
 

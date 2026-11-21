@@ -135,6 +135,15 @@ data class TimerState(
 )
 
 @Serializable
+data class LeaderboardPrefs(
+    val displayName: String = "",
+    val nameUpdatedAt: Long = 0L,
+    val publicTagIds: List<String> = emptyList(),
+    val tagsUpdatedAt: Long = 0L,
+    val updatedAt: Long = 0L
+)
+
+@Serializable
 data class Store(
     val version: Int = 1,
     val habits: List<Habit> = emptyList(),
@@ -144,6 +153,7 @@ data class Store(
     val tags: List<Tag> = defaultTags(),
     val focusSessions: List<FocusSession> = emptyList(),
     val timer: TimerState? = null,
+    val leaderboard: LeaderboardPrefs = LeaderboardPrefs(),
     val updatedAt: Long = 0L,
     val device: String = ""
 )
@@ -215,6 +225,7 @@ fun emptyStore(deviceId: String, now: Long = System.currentTimeMillis()): Store 
     tags = defaultTags(),
     focusSessions = emptyList(),
     timer = null,
+    leaderboard = LeaderboardPrefs(),
     updatedAt = now,
     device = deviceId
 )

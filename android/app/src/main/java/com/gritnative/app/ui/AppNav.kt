@@ -12,24 +12,22 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,15 +37,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.gritnative.app.ui.components.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,9 +56,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -84,7 +85,9 @@ import com.gritnative.app.data.todayHabitsDone
 import com.gritnative.app.ui.components.AmbientBackdrop
 import com.gritnative.app.ui.components.CategoryEditorSheet
 import com.gritnative.app.ui.components.DeleteTagSheet
+import com.gritnative.app.ui.components.EntranceWindow
 import com.gritnative.app.ui.components.HabitEditorSheet
+import com.gritnative.app.ui.components.LocalEntranceWindow
 import com.gritnative.app.ui.components.RoundIconButton
 import com.gritnative.app.ui.components.ShapeBadge
 import com.gritnative.app.ui.components.StaggeredEntry
@@ -94,7 +97,6 @@ import com.gritnative.app.ui.theme.Grit
 import com.gritnative.app.ui.theme.Symbol
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 private data class GritTab(val id: String, val label: String, val symbol: String)
 
@@ -122,7 +124,7 @@ private data class Celebration(
 private val authSkippedThisProcess = mutableStateOf(false)
 
 private val tabs = listOf(
-    GritTab("today", "Today", "wb_sunny"),
+    GritTab("today", "Habits", "wb_sunny"),
     GritTab("tasks", "Tasks", "checklist"),
     GritTab("focus", "Focus", "psychiatry"),
     GritTab("stats", "Stats", "monitoring"),
@@ -230,11 +232,11 @@ fun AppNav(
 
     val page = if (settingsOpen) "settings" else tab
     val pageOrder = listOf("today", "tasks", "focus", "stats", "ranks")
-    val title = if (settingsOpen) "Settings" else tabs.firstOrNull { it.id == tab }?.label ?: "Today"
+    val title = if (settingsOpen) "Settings" else tabs.firstOrNull { it.id == tab }?.label ?: "Habits"
     val subtitle = when (page) {
         "settings" -> "Tune Panadoro to your rhythm"
         "today" -> LocalDate.now().format(
-            DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault())
+            DateTimeFormatter.ofPattern("EEEE, d MMMM", com.gritnative.app.data.AppLocale.current())
         )
         "tasks" -> "${store.openTaskCount()} open · ${store.dueTodayTaskCount()} due today"
         "focus" -> {
@@ -255,6 +257,33 @@ fun AppNav(
     val secondsLeft = computeSecondsLeft(timer, now)
     val running = timer?.running == true
 
+    // One pager holds the five tabs: swiping sideways moves between them, and
+    // a navigation-bar tap glides the same pages.
+    val pagerState = rememberPagerState(
+        initialPage = pageOrder.indexOf(tab).coerceAtLeast(0),
+        pageCount = { pageOrder.size }
+    )
+
+    // A swipe that settles on a page makes it the current tab.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            val id = pageOrder.getOrNull(page) ?: return@collect
+            if (id != tab) {
+                settingsOpen = false
+                tab = id
+            }
+        }
+    }
+
+    // A tab tap (or a deep link) glides the pager to that page.
+    LaunchedEffect(tab, settingsOpen) {
+        if (settingsOpen) return@LaunchedEffect
+        val target = pageOrder.indexOf(tab).coerceAtLeast(0)
+        if (!pagerState.isScrollInProgress && pagerState.settledPage != target) {
+            pagerState.animateScrollToPage(target)
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(Modifier.fillMaxSize()) {
             GritTopBar(
@@ -273,74 +302,74 @@ fun AppNav(
 
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 AnimatedContent(
-                    targetState = page,
+                    targetState = settingsOpen,
                     transitionSpec = {
-                        if (targetState == "settings" || initialState == "settings") {
-                            (fadeIn(tween(260)) + slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 8 })
-                                .togetherWith(
-                                    fadeOut(tween(170)) +
-                                        slideOutVertically(tween(200)) { -it / 10 }
-                                )
-                        } else {
-                            val from = pageOrder.indexOf(initialState).let { if (it < 0) 0 else it }
-                            val to = pageOrder.indexOf(targetState).let { if (it < 0) from else it }
-                            val forward = to >= from
-                            (
-                                fadeIn(tween(250)) +
-                                    slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) {
-                                        if (forward) it / 5 else -it / 5
-                                    }
-                                ).togetherWith(
-                                fadeOut(tween(160)) +
-                                    slideOutHorizontally(tween(250, easing = FastOutSlowInEasing)) {
-                                        if (forward) -it / 7 else it / 7
-                                    }
+                        (fadeIn(tween(260)) + slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 8 })
+                            .togetherWith(
+                                fadeOut(tween(170)) +
+                                    slideOutVertically(tween(200)) { -it / 10 }
                             )
-                        }
                     },
                     label = "grit-page"
-                ) { destination ->
-                    when (destination) {
-                        "settings" -> SettingsScreen(
-                            store = store,
-                            settings = settings,
-                            syncState = syncState,
-                            onNewCategory = { sheet = AppSheet.Category("") },
-                            onEditCategory = { sheet = AppSheet.Category(it) },
-                            onDeleteCategory = { pendingCategoryDelete = it }
-                        )
-                        "tasks" -> TasksScreen(
-                            store = store,
-                            onNewTask = { sheet = AppSheet.Task("") },
-                            onEditTask = { sheet = AppSheet.Task(it) }
-                        )
-                        "focus" -> FocusScreen(
-                            store = store,
-                            onNewTag = { sheet = AppSheet.Tag("") },
-                            onEditTag = { sheet = AppSheet.Tag(it) },
-                            onDeleteTag = { sheet = AppSheet.DeleteTag(it) },
-                            onEditTask = { sheet = AppSheet.Task(it) }
-                        )
-                        "stats" -> StatsScreen(
-                            store = store,
-                            weekStartMonday = settings.weekStartMonday
-                        )
-                        "ranks" -> RanksScreen(
-                            store = store,
-                            settings = settings,
-                            signedIn = auth.signedIn,
-                            onSignIn = { authSkippedThisProcess.value = false }
-                        )
-                        else -> TodayScreen(
-                            store = store,
-                            showCompleted = settings.showCompleted,
-                            weekStartMonday = settings.weekStartMonday,
-                            onNewHabit = { sheet = AppSheet.Habit("") },
-                            onEditHabit = { sheet = AppSheet.Habit(it) },
-                            onNewCategory = { sheet = AppSheet.Category("") },
-                            onEditCategory = { sheet = AppSheet.Category(it) },
-                            onDeleteCategory = { pendingCategoryDelete = it }
-                        )
+                ) { openSettings ->
+                    if (openSettings) {
+                        CompositionLocalProvider(
+                            LocalEntranceWindow provides remember { EntranceWindow() }
+                        ) {
+                            SettingsScreen(
+                                store = store,
+                                settings = settings,
+                                syncState = syncState,
+                                onNewCategory = { sheet = AppSheet.Category("") },
+                                onEditCategory = { sheet = AppSheet.Category(it) },
+                                onDeleteCategory = { pendingCategoryDelete = it }
+                            )
+                        }
+                    } else {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            key = { page -> pageOrder[page] }
+                        ) { page ->
+                            CompositionLocalProvider(
+                                LocalEntranceWindow provides remember { EntranceWindow() }
+                            ) {
+                                when (pageOrder[page]) {
+                                    "tasks" -> TasksScreen(
+                                        store = store,
+                                        onNewTask = { sheet = AppSheet.Task("") },
+                                        onEditTask = { sheet = AppSheet.Task(it) }
+                                    )
+                                    "focus" -> FocusScreen(
+                                        store = store,
+                                        onNewTag = { sheet = AppSheet.Tag("") },
+                                        onEditTag = { sheet = AppSheet.Tag(it) },
+                                        onDeleteTag = { sheet = AppSheet.DeleteTag(it) },
+                                        onEditTask = { sheet = AppSheet.Task(it) }
+                                    )
+                                    "stats" -> StatsScreen(
+                                        store = store,
+                                        weekStartMonday = settings.weekStartMonday
+                                    )
+                                    "ranks" -> RanksScreen(
+                                        store = store,
+                                        settings = settings,
+                                        signedIn = auth.signedIn,
+                                        onSignIn = { authSkippedThisProcess.value = false }
+                                    )
+                                    else -> TodayScreen(
+                                        store = store,
+                                        showCompleted = settings.showCompleted,
+                                        weekStartMonday = settings.weekStartMonday,
+                                        onNewHabit = { sheet = AppSheet.Habit("") },
+                                        onEditHabit = { sheet = AppSheet.Habit(it) },
+                                        onNewCategory = { sheet = AppSheet.Category("") },
+                                        onEditCategory = { sheet = AppSheet.Category(it) },
+                                        onDeleteCategory = { pendingCategoryDelete = it }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -388,7 +417,6 @@ fun AppNav(
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)
-                .fillMaxWidth()
         )
 
         celebration?.let { item ->
@@ -474,10 +502,14 @@ private fun GritTopBar(
     onTimerClick: () -> Unit,
     onSettings: () -> Unit
 ) {
+    // The bar keeps a stable height no matter whether the timer chip is
+    // showing: the chip is capped well below the bar's own height, so pages
+    // never get nudged up and down when a session starts or ends.
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
+            .defaultMinSize(minHeight = 56.dp)
             .padding(start = if (settingsOpen) 8.dp else 18.dp, end = 10.dp, top = 7.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -540,6 +572,7 @@ private fun GritTopBar(
             val focus = timer?.phase == "focus"
             Surface(
                 onClick = onTimerClick,
+                modifier = Modifier.height(30.dp),
                 shape = CircleShape,
                 color = if (focus) MaterialTheme.colorScheme.primaryContainer
                 else MaterialTheme.colorScheme.tertiaryContainer,
@@ -547,26 +580,32 @@ private fun GritTopBar(
                 else MaterialTheme.colorScheme.onTertiaryContainer
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Symbol(
                         if (focus) "psychiatry" else "coffee",
-                        size = 14.dp,
+                        size = 13.dp,
                         filled = true
                     )
                     AnimatedContent(
                         targetState = formatClock(secondsLeft),
                         transitionSpec = {
-                            (fadeIn(tween(180)) + slideInVertically(tween(180)) { it / 2 })
-                                .togetherWith(fadeOut(tween(90)))
+                            (
+                                fadeIn(tween(150)) +
+                                    scaleIn(initialScale = 0.8f, animationSpec = tween(200))
+                                ).togetherWith(
+                                fadeOut(tween(80)) +
+                                    scaleOut(targetScale = 0.8f, animationSpec = tween(120))
+                            )
                         },
                         label = "top-clock"
                     ) { clock ->
                         Text(
                             text = clock,
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1
                         )
@@ -596,36 +635,37 @@ private fun GritBottomNav(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // The Tomato-style floating bar: one tinted pill, every tab an icon, and
+    // the tab you are on becomes a solid button that pops its name open. The
+    // reflow of the widening button is what makes the highlight feel like it
+    // travels between tabs.
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(27.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.34f)),
-        shadowElevation = 10.dp
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        shadowElevation = 12.dp
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .padding(5.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+            modifier = Modifier.padding(7.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             tabs.forEach { item ->
                 val selected = item.id == current
                 val container by animateColorAsState(
-                    targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                    animationSpec = tween(280, easing = FastOutSlowInEasing),
+                    targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    animationSpec = tween(260, easing = FastOutSlowInEasing),
                     label = "nav-container"
                 )
                 val content by animateColorAsState(
-                    targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    animationSpec = tween(240),
+                    targetValue = if (selected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onPrimaryContainer,
+                    animationSpec = tween(220),
                     label = "nav-content"
                 )
                 val iconScale by animateFloatAsState(
-                    targetValue = if (selected) 1.1f else 0.92f,
-                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 480f),
+                    targetValue = if (selected) 1.1f else 0.94f,
+                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 460f),
                     label = "nav-icon-scale"
                 )
                 val badge = when (item.id) {
@@ -633,35 +673,29 @@ private fun GritBottomNav(
                     "focus" -> if (running) "•" else ""
                     else -> ""
                 }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(container, RoundedCornerShape(20.dp))
-                        .clickable { onSelect(item.id) },
-                    contentAlignment = Alignment.Center
+                Surface(
+                    onClick = { onSelect(item.id) },
+                    shape = CircleShape,
+                    color = container,
+                    contentColor = content,
+                    modifier = Modifier.height(48.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         Box(
                             Modifier
-                                .size(24.dp)
+                                .size(22.dp)
                                 .scale(iconScale),
                             contentAlignment = Alignment.Center
                         ) {
-                            Symbol(
-                                item.symbol,
-                                size = 20.dp,
-                                color = content,
-                                filled = selected
-                            )
+                            Symbol(item.symbol, size = 20.dp, filled = selected)
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .offset(x = 5.dp, y = (-3).dp),
+                                    .offset(x = 5.dp, y = (-4).dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 AnimatedContent(
@@ -679,7 +713,7 @@ private fun GritBottomNav(
                                                 .widthIn(min = if (dot) 6.dp else 13.dp)
                                                 .height(if (dot) 6.dp else 13.dp)
                                                 .background(
-                                                    if (dot) MaterialTheme.colorScheme.tertiary
+                                                    if (dot) content
                                                     else MaterialTheme.colorScheme.primary,
                                                     CircleShape
                                                 ),
@@ -701,14 +735,25 @@ private fun GritBottomNav(
                                 }
                             }
                         }
-                        Text(
-                            text = item.label,
-                            color = content,
-                            fontSize = 9.5.sp,
-                            lineHeight = 11.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                            maxLines = 1
-                        )
+                        AnimatedVisibility(
+                            visible = selected,
+                            enter = expandHorizontally(
+                                spring(dampingRatio = 0.78f, stiffness = 380f)
+                            ) + fadeIn(tween(160)),
+                            exit = shrinkHorizontally(
+                                spring(dampingRatio = 0.82f, stiffness = 460f)
+                            ) + fadeOut(tween(110))
+                        ) {
+                            Text(
+                                text = item.label,
+                                fontSize = 12.5.sp,
+                                lineHeight = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip
+                            )
+                        }
                     }
                 }
             }
@@ -789,10 +834,11 @@ private fun GritSplash() {
             second = MaterialTheme.colorScheme.tertiary,
             third = MaterialTheme.colorScheme.secondary
         )
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
+        CompositionLocalProvider(LocalEntranceWindow provides remember { EntranceWindow() }) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
             StaggeredEntry(0) {
                 Box(Modifier.scale(pulse).rotate(drift)) {
                     ShapeBadge(
@@ -830,6 +876,7 @@ private fun GritSplash() {
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
             }
         }
     }

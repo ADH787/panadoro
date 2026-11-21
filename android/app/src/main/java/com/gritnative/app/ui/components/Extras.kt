@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -181,8 +180,7 @@ fun <T> SegmentedSelector(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = CircleShape,
-        color = Grit.colors.field,
-        border = BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.18f))
+        color = Grit.colors.field
     ) {
         Row(
             modifier = Modifier.padding(4.dp),
@@ -242,13 +240,13 @@ fun <T> SegmentedSelector(
     }
 }
 
-/** A rounded card with the border weight used by the desktop and web Grit. */
+/** A rounded card in the app's calm surface language. */
 @Composable
 fun GritPanel(
     modifier: Modifier = Modifier,
     container: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     contentPadding: PaddingValues = PaddingValues(16.dp),
-    borderColor: Color? = Grit.colors.outline.copy(alpha = 0.28f),
+    borderColor: Color? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     StaggeredEntry {

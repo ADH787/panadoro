@@ -10,16 +10,23 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.gritnative.app.data.StoreRepository
+import com.gritnative.app.data.AppLocale
 import com.gritnative.app.data.ThemeMode
 import com.gritnative.app.ui.AppNav
+import com.gritnative.app.ui.components.AppLanguage
+import com.gritnative.app.ui.components.LocalArabic
 import com.gritnative.app.ui.theme.GritTheme
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val notifPermission =
@@ -46,17 +53,29 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
+            val arabic = when (settings.language) {
+                "ar" -> true
+                "en" -> false
+                else -> Locale.getDefault().language.startsWith("ar")
+            }
             SideEffect {
+                AppLanguage.isArabic = arabic
+                AppLocale.isArabic = arabic
                 WindowCompat.getInsetsController(window, window.decorView).apply {
                     isAppearanceLightStatusBars = !dark
                     isAppearanceLightNavigationBars = !dark
                 }
             }
-            GritTheme(settings) {
-                AppNav(
-                    requestedTab = pendingTab,
-                    onRequestHandled = { requestedTab.value = null }
-                )
+            CompositionLocalProvider(
+                LocalArabic provides arabic,
+                LocalLayoutDirection provides if (arabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+            ) {
+                GritTheme(settings) {
+                    AppNav(
+                        requestedTab = pendingTab,
+                        onRequestHandled = { requestedTab.value = null }
+                    )
+                }
             }
         }
     }

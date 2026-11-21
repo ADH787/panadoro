@@ -7,7 +7,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -97,8 +95,7 @@ fun TaskRow(
     Surface(
         modifier = modifier.fillMaxWidth().animateContentSize(),
         shape = RoundedCornerShape(22.dp),
-        color = cardColor,
-        border = if (task.done) null else BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.28f))
+        color = cardColor
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -287,8 +284,7 @@ fun SessionRow(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, Grit.colors.outline.copy(alpha = 0.22f))
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -357,7 +353,6 @@ fun GoalBar(
         modifier = modifier
             .fillMaxWidth()
             .background(lerpColor(MaterialTheme.colorScheme.surfaceContainerLow, accent, 0.07f), RoundedCornerShape(16.dp))
-            .border(1.dp, accent.copy(alpha = 0.14f), RoundedCornerShape(16.dp))
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)

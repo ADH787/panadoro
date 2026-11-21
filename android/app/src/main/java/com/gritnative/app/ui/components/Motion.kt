@@ -18,11 +18,15 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -33,8 +37,33 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 /**
+ * The short window after a screen appears in which entrance animations are
+ * allowed. Rows composed later — while scrolling, or recycled back into view —
+ * skip the entrance and appear at once, so nothing flickers back in.
+ */
+@Immutable
+class EntranceWindow(
+    internal val startedAtNanos: Long = System.nanoTime(),
+    private val durationNanos: Long = 650_000_000L
+) {
+    fun expired(): Boolean = durationNanos <= 0L ||
+        System.nanoTime() - startedAtNanos > durationNanos
+}
+
+/**
+ * Falls back to an already-expired window: screens that never provide one get
+ * calm, flicker-free content with no entrance replay.
+ */
+val LocalEntranceWindow: ProvidableCompositionLocal<EntranceWindow> =
+    staticCompositionLocalOf { EntranceWindow(0L, 0L) }
+
+/**
  * A light staggered entrance for cards and rows. Animations are intentionally
  * short and spring-based: the app should feel alive, not slow.
+ *
+ * The entrance plays once per screen. [rememberSaveable] keeps the "played"
+ * flag when LazyColumn recycles rows, so scrolling back up never replays it,
+ * and rows composed after the [EntranceWindow] expires show at once.
  */
 @Composable
 fun StaggeredEntry(
@@ -42,13 +71,19 @@ fun StaggeredEntry(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay((index.coerceAtLeast(0) * 45L).coerceAtMost(450L))
-        visible = true
+    var played by rememberSaveable { mutableStateOf(false) }
+    if (!played) {
+        if (LocalEntranceWindow.current.expired()) {
+            content()
+            return
+        }
+        LaunchedEffect(Unit) {
+            delay((index.coerceAtLeast(0) * 45L).coerceAtMost(360L))
+            played = true
+        }
     }
     AnimatedVisibility(
-        visible = visible,
+        visible = played,
         modifier = modifier,
         enter = fadeIn(tween(320, easing = FastOutSlowInEasing)) +
             slideInVertically(spring(dampingRatio = 0.82f, stiffness = 380f)) { it / 7 } +

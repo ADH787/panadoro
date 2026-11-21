@@ -1,10 +1,31 @@
-# Panadoro 1.8
+# Panadoro 1.9.2
 
 Native Kotlin/Jetpack Compose build of the merged Panadoro habit tracker and
 Tomato focus timer. The UI data model and Firebase wire format are compatible
 with the quickshell app, so both clients stay in sync.
 
-## What's new in 1.8
+## What's new in 1.9.2
+
+- The Today tab is now **Habits** — same list, a name that fits it.
+- Swipe left and right to move between tabs. The navigation bar follows the
+  Tomato style: a tinted floating pill of icons where the tab you are on
+  becomes a solid button and pops its name open, and the widening reflow
+  carries the highlight between tabs.
+- Every icon glyph sits dead-centre in its circle: settings, play and pause
+  no longer lean against the edges.
+- The top bar keeps a stable height, so the running-timer pill can never
+  nudge the page up and down when a session starts or ends.
+- List entrances play once per screen and stay played: scrolling back up no
+  longer flickers rows back in.
+- All hairline one-pixel borders are gone; the celebration card is a calm
+  rounded silhouette instead of a stretched twelve-sided polygon.
+- The timer's play/pause button bounces on every toggle and spins between
+  its two glyphs.
+- Settings leads with its own Language section (with a proper translate
+  icon), and the Arabic translation now covers composite strings — plans,
+  greetings, stats, ranks and settings copy — instead of only fixed labels.
+
+## What's new in 1.9.1
 
 - A full sign-in screen now appears when the app opens signed out. Accounts are
   optional — “Continue without an account” keeps the local-only experience.
@@ -56,7 +77,7 @@ ring, richer timer notification and alarm/notification fallback controls.
 
 ## Features
 
-- Today, Tasks, Focus, Stats and Ranks tabs with Material You dynamic colour.
+- Habits, Tasks, Focus, Stats and Ranks tabs with Material You dynamic colour.
 - Habits with schedules, targets, categories, notes and 12-week heatmaps.
 - Tasks with priorities, subtasks, due dates and tags.
 - Focus timer with short/long breaks, per-tag plans, session history and stats.

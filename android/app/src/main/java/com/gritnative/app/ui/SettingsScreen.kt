@@ -10,7 +10,6 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,7 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.gritnative.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -78,6 +77,7 @@ import com.gritnative.app.ui.components.SettingsSection
 import com.gritnative.app.ui.components.ShapeBadge
 import com.gritnative.app.ui.components.Stepper
 import com.gritnative.app.ui.components.ToggleRow
+import com.gritnative.app.ui.components.translateText
 import com.gritnative.app.ui.theme.Grit
 import com.gritnative.app.ui.theme.Symbol
 import com.gritnative.app.widgets.WidgetCatalog
@@ -134,6 +134,12 @@ fun SettingsScreen(
     ) {
         exactAlarmsEnabled = canScheduleExactAlarms(context)
     }
+    val exportBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> if (uri != null) StoreRepository.exportBackup(uri) }
+    val importBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) StoreRepository.importBackup(uri) }
 
     LaunchedEffect(resetArmed) {
         if (resetArmed) {
@@ -181,6 +187,26 @@ fun SettingsScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 112.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item(key = "language") {
+            SettingsSection(title = "Language", symbol = "translate") {
+                SettingsRow(
+                    symbol = "translate",
+                    title = "App language",
+                    description = "Arabic switches the whole app to RTL"
+                )
+                SegmentedSelector(
+                    options = listOf(
+                        SegmentOption("system", "System"),
+                        SegmentOption("en", "English"),
+                        SegmentOption("ar", "العربية")
+                    ),
+                    selected = settings.language,
+                    onSelect = { StoreRepository.setLanguage(it) },
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+        }
+
         item(key = "appearance") {
             SettingsSection(title = "Appearance", symbol = "palette") {
                 SettingsRow(
@@ -199,13 +225,32 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 Spacer(Modifier.height(2.dp))
-                ToggleRow(
-                    symbol = "wallpaper",
-                    label = "Dynamic color",
-                    description = "Take the wallpaper palette on Android 12+",
-                    checked = settings.dynamicColor,
-                    onCheckedChange = { StoreRepository.setDynamicColor(it) }
+                SettingsRow(
+                    symbol = "palette",
+                    title = "Color profile",
+                    description = "Forest, ocean, amber, rose, violet or slate"
                 )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(
+                        "dynamic" to "Dynamic",
+                        "forest" to "Forest",
+                        "ocean" to "Ocean",
+                        "amber" to "Amber",
+                        "rose" to "Rose",
+                        "violet" to "Violet",
+                        "slate" to "Slate"
+                    ).forEach { (id, label) ->
+                        FormChip(
+                            label = label,
+                            selected = settings.colorProfile == id,
+                            onClick = { StoreRepository.setColorProfile(id) }
+                        )
+                    }
+                }
                 ToggleRow(
                     symbol = "nightlight",
                     label = "AMOLED black",
@@ -347,8 +392,10 @@ fun SettingsScreen(
                                         if (!requested) {
                                             Toast.makeText(
                                                 context,
-                                                "This launcher did not open the pin dialog. " +
-                                                    "Long-press the home screen and choose Widgets → Grit.",
+                                                translateText(
+                                                    "This launcher did not open the pin dialog. " +
+                                                        "Long-press the home screen and choose Widgets → Grit."
+                                                ),
                                                 Toast.LENGTH_LONG
                                             ).show()
                                         }
@@ -420,8 +467,7 @@ fun SettingsScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    color = statusContainer,
-                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.18f))
+                    color = statusContainer
                 ) {
                     Row(
                         modifier = Modifier
@@ -590,7 +636,7 @@ fun SettingsScreen(
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Panadoro ${BuildConfig.VERSION_NAME} × Tomato",
+                            text = "Panadoro ${BuildConfig.VERSION_NAME}",
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 19.sp,
                             fontWeight = FontWeight.Bold
@@ -619,11 +665,50 @@ fun SettingsScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(Modifier.height(8.dp))
+                GritButton(
+                    label = "Open project repository",
+                    onClick = {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://github.com/ADH787/panadoro")
+                            )
+                        )
+                    },
+                    symbol = "open_in_new",
+                    style = GritButtonStyle.TONAL,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
         item(key = "data") {
             SettingsSection(title = "Data", symbol = "database") {
+                SettingsRow(
+                    symbol = "download",
+                    title = "Backup JSON",
+                    description = "Save a complete snapshot of habits, tasks, focus history and settings."
+                )
+                GritButton(
+                    label = "Save backup",
+                    onClick = { exportBackup.launch("panadoro-backup.json") },
+                    symbol = "download",
+                    style = GritButtonStyle.TONAL,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                SettingsRow(
+                    symbol = "upload",
+                    title = "Import backup",
+                    description = "Restore a backup and upload it to every synced device."
+                )
+                GritButton(
+                    label = "Choose backup file",
+                    onClick = { importBackup.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                    symbol = "upload",
+                    style = GritButtonStyle.TONAL,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 SettingsRow(
                     symbol = "delete_forever",
                     title = "Reset Panadoro data",

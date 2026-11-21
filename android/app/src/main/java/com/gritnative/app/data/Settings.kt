@@ -16,6 +16,8 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 data class AppSettings(
     val deviceId: String = "",
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val language: String = "system",
+    val colorProfile: String = "dynamic",
     val dynamicColor: Boolean = true,
     val amoled: Boolean = false,
     val weekStartMonday: Boolean = true,
