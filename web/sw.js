@@ -1,4 +1,4 @@
-const CACHE = "panadoro-web-v6";
+const CACHE = "panadoro-web-v7";
 const SHELL = [
   "./",
   "./index.html",
