@@ -110,6 +110,9 @@ import {
   signOut,
   syncNow,
 } from "./cloud.js";
+import { ICONS } from "./icons.js";
+import morphdom from "./vendor/morphdom.js";
+import { applyLanguage, currentLanguage, isRTL, setLanguage, translateDOM, translateText } from "./i18n.js";
 
 const TABS = [
   { id: "today", label: "Today", icon: "sun" },
@@ -121,49 +124,49 @@ const TABS = [
 
 const ICON_ALIASES = {
   wb_sunny: "sun",
-  checklist: "checklist",
+  checklist: "list-checks",
   psychiatry: "brain",
-  monitoring: "stats",
+  monitoring: "chart-no-axes-column",
   settings: "settings",
   add: "plus",
   add_task: "plus",
-  close: "close",
+  close: "x",
   arrow_back: "arrow-left",
   check: "check",
-  check_circle: "check",
-  task_alt: "checklist",
-  radio_button_unchecked: "focus",
-  edit: "edit",
-  edit_note: "note",
-  delete: "trash",
-  delete_forever: "trash",
+  check_circle: "circle-check",
+  task_alt: "circle-check",
+  radio_button_unchecked: "circle",
+  edit: "pencil",
+  edit_note: "pencil",
+  delete: "trash-2",
+  delete_forever: "trash-2",
   play_arrow: "play",
   pause: "pause",
-  restart_alt: "reset",
-  skip_next: "skip",
+  restart_alt: "rotate-ccw",
+  skip_next: "skip-forward",
   coffee: "coffee",
   local_fire_department: "flame",
   favorite: "heart",
   neurology: "brain",
   self_improvement: "brain",
-  fitness_center: "run",
-  directions_run: "run",
-  menu_book: "book",
-  school: "school",
-  work: "work",
+  fitness_center: "dumbbell",
+  directions_run: "activity",
+  menu_book: "book-open",
+  school: "graduation-cap",
+  work: "briefcase",
   palette: "palette",
-  water_drop: "water",
-  medication: "heart",
-  restaurant: "coffee",
-  music_note: "note",
-  code: "note",
+  water_drop: "droplet",
+  medication: "pill",
+  restaurant: "utensils",
+  music_note: "music",
+  code: "code",
   brush: "palette",
   label: "tag",
   inbox: "inbox",
-  apps: "apps",
-  person: "person",
+  apps: "layout-grid",
+  person: "user",
   emoji_events: "trophy",
-  insights: "stats",
+  insights: "chart-no-axes-column",
   timelapse: "clock",
   timer: "clock",
   schedule: "clock",
@@ -173,27 +176,52 @@ const ICON_ALIASES = {
   history: "clock",
   flag: "target",
   bolt: "flame",
-  cloudy: "cloud",
   cloud: "cloud",
   cloud_off: "cloud-off",
-  cloud_done: "cloud-done",
-  sync: "sync",
-  refresh: "refresh",
-  login: "logout",
-  logout: "logout",
+  cloud_done: "cloud-check",
+  sync: "refresh-cw",
+  refresh: "refresh-cw",
+  login: "log-in",
+  logout: "log-out",
   key: "lock",
   lock: "lock",
   mail: "mail",
   visibility: "eye",
-  warning: "warning",
-  error: "warning",
+  warning: "triangle-alert",
+  error: "triangle-alert",
   download: "download",
   upload: "upload",
   expand_more: "chevron-down",
   chevron_right: "chevron-right",
-  circle: "focus",
-  favorite: "heart",
+  note: "file-text",
+  person_add: "user-plus",
+  circle: "circle",
+  pill: "pill",
+  moon: "moon",
+  more: "more-horizontal",
+  loader: "loader-circle",
+  celebration: "sparkles",
+  done_all: "circle-check",
+  focus: "timer",
+  reset: "rotate-ccw",
+  skip: "skip-forward",
+  stats: "chart-no-axes-column",
+  trash: "trash-2",
+  book: "book-open",
+  water: "droplet",
+  run: "activity",
 };
+
+function iconName(name) {
+  const clean = String(name ?? "").trim();
+  const mapped = ICON_ALIASES[clean] || clean;
+  return ICONS[mapped] ? mapped : "circle";
+}
+
+function icon(name, cls = "") {
+  const key = iconName(name);
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[key]}</svg>`;
+}
 
 const ICON_CHOICES = [
   "focus", "flame", "heart", "book", "water", "run", "brain", "coffee",
@@ -242,15 +270,6 @@ function esc(value) {
 
 function attr(value) {
   return esc(value);
-}
-
-function iconName(name) {
-  const clean = String(name ?? "").trim();
-  return ICON_ALIASES[clean] || (clean.startsWith("i-") ? clean.slice(2) : clean) || "focus";
-}
-
-function icon(name, cls = "") {
-  return `<svg class="${cls}" aria-hidden="true"><use href="#i-${iconName(name)}"></use></svg>`;
 }
 
 function validHex(value) {
@@ -336,7 +355,7 @@ function pageSubtitle() {
   if (S.ui.settingsOpen) return "Tune Panadoro to your rhythm";
   switch (S.ui.tab) {
     case "today":
-      return new Date().toLocaleDateString(undefined, {
+      return new Date().toLocaleDateString(currentLanguage() === "ar" ? "ar" : "en-US", {
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -532,20 +551,16 @@ function todayPage() {
   const subtitle = total === 0
     ? "Nothing scheduled. Add one small thing."
     : `${done} of ${total} habits · ${fmtMin(todayFocusMinutes())} focused today`;
-  const heroColors = allDone
-    ? "background:var(--success-container);color:var(--on-success-container);--hero-bg:var(--success-container);--hero-ink:var(--on-success-container);--hero-accent:var(--success)"
-    : "background:var(--tertiary-container);color:var(--on-tertiary-container);--hero-bg:var(--tertiary-container);--hero-ink:var(--on-tertiary-container);--hero-accent:var(--tertiary)";
-
   return `
     <div class="stack">
-      <section class="hero" style="${heroColors}">
+      <section class="hero">
         <div class="hero-icon">${icon(allDone ? "trophy" : "sun")}</div>
         <div class="hero-copy">
           <h2>${esc(greeting())}${allDone ? ", all done." : "."}</h2>
           <p>${esc(subtitle)}</p>
         </div>
         <div class="hero-side">
-          <div class="progress-ring" style="--value:${progress}"><span>${done}/${total}</span></div>
+          ${progressRingHTML(progress, done, total)}
         </div>
       </section>
 
@@ -587,6 +602,18 @@ function todayPage() {
 
       <div style="height:40px"></div>
     </div>`;
+}
+
+function progressRingHTML(progress, done, total) {
+  const circumference = 2 * Math.PI * 26;
+  const offset = circumference * (1 - Math.max(0, Math.min(1, Number(progress ?? 0))));
+  return `<div class="progress-ring" title="${done}/${total}">
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <circle class="track" cx="32" cy="32" r="26"></circle>
+      <circle class="value" cx="32" cy="32" r="26" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"></circle>
+    </svg>
+    <span>${done}/${total}</span>
+  </div>`;
 }
 
 function statTile(symbol, value, label, hint, role = "primary", flame = false) {
@@ -648,7 +675,7 @@ function tasksPage() {
   const showingDone = filter === "done";
   return `
     <div class="stack">
-      <section class="hero" style="--hero-bg:var(--${showingDone ? "success" : "primary"}-container);--hero-ink:var(--on-${showingDone ? "success" : "primary"}-container);--hero-accent:var(--${showingDone ? "success" : "primary"})">
+      <section class="hero">
         <div class="hero-icon">${icon(tasks.length ? "checklist" : "check")}</div>
         <div class="hero-copy">
           <h2>${tasks.length === 0 ? (showingDone ? "No history yet." : "Nothing left in this list.") : "One thing at a time."}</h2>
@@ -877,7 +904,7 @@ function statsPage() {
 
   return `
     <div class="stack">
-      <section class="hero" style="--hero-bg:var(--secondary-container);--hero-ink:var(--on-secondary-container);--hero-accent:var(--primary)">
+      <section class="hero">
         <div class="hero-icon">${icon("stats")}</div>
         <div class="hero-copy">
           <h2>${focusMinutes > 0 ? "You gave the time a shape." : "The first session is a blank page."}</h2>
@@ -1071,12 +1098,16 @@ function ranksPage() {
   const podiumOrder = top.length === 0 ? [] : top.length >= 3 ? [1, 0, 2] : top.length === 2 ? [1, 0] : [0];
   const podium = podiumOrder.map((index) => ({ ...top[index], rank: index + 1 }));
   const updated = S.board.updatedAt
-    ? new Date(S.board.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    ? new Date(S.board.updatedAt).toLocaleTimeString(currentLanguage() === "ar" ? "ar" : [], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
     : "";
+  const boardPending = S.board.loading && ranked.length === 0;
 
   return `
     <div class="stack">
-      <section class="hero" style="--hero-bg:var(--secondary-container);--hero-ink:var(--on-secondary-container);--hero-accent:var(--secondary)">
+      <section class="hero">
         <div class="hero-icon">${icon("trophy")}</div>
         <div class="hero-copy">
           <h2>Focus ranks</h2>
@@ -1101,20 +1132,22 @@ function ranksPage() {
       ${S.board.loading ? `<div class="loading-line"><span class="spinner"></span> Listening to the other devices…</div>` : ""}
       ${S.board.error ? `<div class="error-line">${esc(S.board.error)}</div>` : ""}
 
-      ${podium.length > 0 ? `<div class="podium">${podium.map((entry) => podiumCard(entry, period)).join("")}</div>` : ""}
+      ${boardPending ? ranksSkeletonHTML() : `
+        ${podium.length > 0 ? `<div class="podium">${podium.map((entry) => podiumCard(entry, period)).join("")}</div>` : ""}
 
-      ${ranked.length > 0 ? `
-        <div class="row" style="margin-top:4px"><h2 style="flex:1">Everyone</h2><span class="muted" style="font-size:10.5px">${ranked.length} account${ranked.length === 1 ? "" : "s"}</span></div>
-        <div class="rank-list">
-          ${ranked.map((entry, index) => rankRow(entry, index, max, period)).join("")}
-        </div>` : `
-        <div class="panel">
-          <div class="empty">
-            <div class="empty-badge">${icon("trophy")}</div>
-            <h3>${S.auth.signedIn ? "The podium is waiting." : "No shared focus yet."}</h3>
-            <p>${S.auth.signedIn ? "Publish a tag below and the first focus session puts you on the board." : "Sign in and make one tag public to start the board."}</p>
-          </div>
-        </div>`}
+        ${ranked.length > 0 ? `
+          <div class="row" style="margin-top:4px"><h2 style="flex:1">Everyone</h2><span class="muted" style="font-size:10.5px">${ranked.length} account${ranked.length === 1 ? "" : "s"}</span></div>
+          <div class="rank-list">
+            ${ranked.map((entry, index) => rankRow(entry, index, max, period)).join("")}
+          </div>` : `
+          <div class="panel">
+            <div class="empty">
+              <div class="empty-badge">${icon("trophy")}</div>
+              <h3>${S.auth.signedIn ? "The podium is waiting." : "No shared focus yet."}</h3>
+              <p>${S.auth.signedIn ? "Publish a tag below and the first focus session puts you on the board." : "Sign in and make one tag public to start the board."}</p>
+            </div>
+          </div>`}
+      `}
 
       ${S.auth.signedIn ? `
         <div class="panel">
@@ -1143,6 +1176,20 @@ function ranksPage() {
       <p class="muted" style="text-align:center;font-size:9.5px;margin-top:4px">${updated ? `Updated ${updated} · the board refreshes every minute` : "Waiting for the first sync."}</p>
       <div style="height:30px"></div>
     </div>`;
+}
+
+function ranksSkeletonHTML() {
+  return `<div class="skeleton-page">
+    <div class="podium">
+      <div class="skeleton" style="height:164px;flex:1"></div>
+      <div class="skeleton" style="height:184px;flex:1"></div>
+      <div class="skeleton" style="height:154px;flex:1"></div>
+    </div>
+    <div class="skeleton skeleton-line" style="margin-top:8px"></div>
+    <div class="skeleton skeleton-row"></div>
+    <div class="skeleton skeleton-row"></div>
+    <div class="skeleton skeleton-row"></div>
+  </div>`;
 }
 
 function podiumCard(entry, period) {
@@ -1214,6 +1261,13 @@ function settingsPage() {
           <span style="flex:1;font-size:12px">Theme</span>
           <div class="segmented small" style="min-width:230px">
             ${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([id, label]) => `<button class="${S.settings.theme === id ? "active" : ""}" data-action="set-theme" data-value="${id}">${label}</button>`).join("")}
+          </div>
+        </div>
+        <div class="row wrap" style="margin-top:12px">
+          <span style="flex:1;font-size:12px">Language</span>
+          <div class="segmented small" style="min-width:180px">
+            <button class="${currentLanguage() === "en" ? "active" : ""}" data-action="set-language" data-value="en">English</button>
+            <button class="${currentLanguage() === "ar" ? "active" : ""}" data-action="set-language" data-value="ar">العربية</button>
           </div>
         </div>
       </div>
@@ -1306,6 +1360,7 @@ function showModal({ title, subtitle, body, submitLabel = "Save", dangerLabel = 
         <button class="btn filled" type="submit">${icon("check")} ${esc(submitLabel)}</button>
       </div>
     </form>`;
+  translateDOM(modal);
   modal.showModal();
   window.setTimeout(() => {
     const first = $(".modal-body input:not([type=hidden]), .modal-body select, .modal-body textarea", modal);
@@ -1555,28 +1610,16 @@ export function render(reason = "change") {
     updateLive();
     return;
   }
-  const scroll = window.scrollY;
-  const activeId = document.activeElement?.id;
-  const activeValueStart = document.activeElement?.selectionStart;
   lastRenderReason = reason;
-  document.getElementById("app").innerHTML = S.ui.authGate ? authGateHTML() : shellHTML();
+  const app = document.getElementById("app");
+  const html = S.ui.authGate ? authGateHTML() : shellHTML();
+  morphdom(app, `<div id="app">${html}</div>`, { childrenOnly: true });
+  applyLanguage();
+  translateDOM(app);
   applyTheme();
   updateLive();
   if (reason === "tab" || reason === "auth" || reason === "import") {
-    window.scrollTo({ top: 0, behavior: "instant" });
-  } else {
-    window.scrollTo({ top: scroll, behavior: "instant" });
-  }
-  if (activeId && (activeId === "focus-note" || activeId.startsWith("auth-"))) {
-    const el = document.getElementById(activeId);
-    if (el) {
-      el.focus({ preventScroll: true });
-      if (typeof activeValueStart === "number" && typeof el.setSelectionRange === "function") {
-        try {
-          el.setSelectionRange(activeValueStart, activeValueStart);
-        } catch (_) {}
-      }
-    }
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 }
 
@@ -1612,8 +1655,8 @@ export function showCelebration(detail = {}) {
   const iconBox = $("#celebration-icon");
   const accent = detail.kind === "habits" ? "var(--success)" : "var(--primary)";
   overlay.style.setProperty("--accent", accent);
-  title.textContent = detail.title || "Done";
-  text.textContent = detail.text || "";
+  title.textContent = translateText(detail.title || "Done");
+  text.textContent = translateText(detail.text || "");
   iconBox.innerHTML = icon(detail.symbol || "check");
   overlay.classList.add("show");
   confetti(detail.kind === "habits");
@@ -1629,7 +1672,7 @@ export function hideCelebration() {
 
 export function toast(message) {
   const node = $("#toast");
-  node.textContent = String(message ?? "");
+  node.textContent = translateText(message);
   node.classList.add("show");
   window.clearTimeout(toast.timer);
   toast.timer = window.setTimeout(() => node.classList.remove("show"), 2400);
@@ -1853,6 +1896,9 @@ export function bindEvents() {
       case "set-theme":
         S.settings.theme = target.dataset.value || "system";
         saveSettings();
+        break;
+      case "set-language":
+        setLanguage(target.dataset.value || "en");
         break;
       case "export-data": exportData(); toast("Snapshot exported"); break;
       case "import-data": $("#import-file")?.click(); break;

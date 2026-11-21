@@ -56,6 +56,7 @@ const defaultSettings = {
   showCompleted: true,
   autoSync: true,
   theme: "system",
+  language: "",
   displayName: "",
   displayNameUpdatedAt: 0,
   publicTagIds: [],
@@ -69,6 +70,7 @@ function loadSettings() {
   merged.publicTagIds = Array.isArray(merged.publicTagIds)
     ? merged.publicTagIds.map(String)
     : [];
+  merged.language = merged.language === "ar" || merged.language === "en" ? merged.language : "";
   merged.displayNameUpdatedAt = Number(merged.displayNameUpdatedAt ?? 0) || 0;
   merged.publicTagsUpdatedAt = Number(merged.publicTagsUpdatedAt ?? 0) || 0;
   return merged;
@@ -205,8 +207,15 @@ export function weekdayOf(key) {
   return dateFromKey(key).getDay();
 }
 
+function dateLocale() {
+  const arabic =
+    S.settings.language === "ar" ||
+    (!S.settings.language && String(navigator.language ?? "").toLowerCase().startsWith("ar"));
+  return arabic ? "ar" : undefined;
+}
+
 export function weekdayName(key, short = true) {
-  return dateFromKey(key).toLocaleDateString(undefined, { weekday: short ? "short" : "long" });
+  return dateFromKey(key).toLocaleDateString(dateLocale(), { weekday: short ? "short" : "long" });
 }
 
 export function relativeDay(key) {
@@ -214,7 +223,11 @@ export function relativeDay(key) {
   if (key === today) return "Today";
   if (key === addDays(today, 1)) return "Tomorrow";
   if (key === addDays(today, -1)) return "Yesterday";
-  return dateFromKey(key).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  return dateFromKey(key).toLocaleDateString(dateLocale(), {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 export function weekStartOffset() {

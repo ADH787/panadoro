@@ -1,4 +1,4 @@
-const CACHE = "panadoro-web-v5";
+const CACHE = "panadoro-web-v6";
 const SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,10 @@ const SHELL = [
   "./js/state.js",
   "./js/cloud.js",
   "./js/ui.js",
+  "./js/i18n.js",
+  "./js/i18n-ar.js",
+  "./js/icons.js",
+  "./js/vendor/morphdom.js",
   "./manifest.webmanifest",
 ];
 
