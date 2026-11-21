@@ -57,6 +57,7 @@ import com.gritnative.app.data.Store
 import com.gritnative.app.data.StoreRepository
 import com.gritnative.app.data.TaskDraft
 import com.gritnative.app.data.Tag
+import com.gritnative.app.data.TimerState
 import com.gritnative.app.data.activeCategories
 import com.gritnative.app.data.activeTag
 import com.gritnative.app.data.activeTags
@@ -112,10 +113,8 @@ fun FocusScreen(
     val tag = store.activeTag
     val colors = tagColors(tag)
     val timer = store.timer
-    val now = rememberTimerNow(timer)
     val running = timer?.running == true
     val onBreak = timer != null && timer.phase != "focus"
-    val secondsLeft = computeSecondsLeft(timer, now)
     val duration = timer?.durationSec?.coerceAtLeast(1) ?: (tag?.focusMinutes ?: 25) * 60
     val phaseLabel = when (timer?.phase) {
         "shortBreak" -> "Short break"
@@ -207,11 +206,11 @@ fun FocusScreen(
             StaggeredEntry(1) {
             FocusStage(
                 tag = tag,
+                timer = timer,
                 running = running,
                 onBreak = onBreak,
                 phaseLabel = phaseLabel,
                 phaseIcon = phaseIcon,
-                secondsLeft = secondsLeft,
                 duration = duration,
                 progressAt = { clock ->
                     val value = timer
@@ -354,11 +353,11 @@ fun FocusScreen(
 @Composable
 private fun FocusStage(
     tag: Tag?,
+    timer: TimerState?,
     running: Boolean,
     onBreak: Boolean,
     phaseLabel: String,
     phaseIcon: String,
-    secondsLeft: Int,
     duration: Int,
     progressAt: (Long) -> Float,
     paused: Boolean,
@@ -442,14 +441,9 @@ private fun FocusStage(
                     wavy = running
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = formatClock(secondsLeft),
-                            color = onContainer,
-                            fontSize = 48.sp,
-                            lineHeight = 52.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
-                        )
+                        // Only this clock recomposes on every tick; the rest
+                        // of the stage (and the screen) stays put.
+                        StageClock(timer = timer, color = onContainer)
                         Text(
                             text = when {
                                 running -> "of ${formatDurationShort((duration / 60.0).toInt())}"
@@ -571,6 +565,19 @@ private fun FocusStage(
             }
         }
     }
+}
+
+@Composable
+private fun StageClock(timer: TimerState?, color: Color) {
+    val now = rememberTimerNow(timer)
+    Text(
+        text = formatClock(computeSecondsLeft(timer, now)),
+        color = color,
+        fontSize = 48.sp,
+        lineHeight = 52.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1
+    )
 }
 
 @Composable

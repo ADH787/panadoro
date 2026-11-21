@@ -230,17 +230,25 @@ fun StatTile(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            val transition = rememberInfiniteTransition(label = "flame")
-            val scale by transition.animateFloat(
-                initialValue = 1f,
-                targetValue = if (flame && value != "0" && value != "—") 1.09f else 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1400),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "flameScale"
-            )
-            Box(modifier = Modifier.rotate((scale - 1f) * 120f)) {
+            // The flame only animates while it is actually lit; an idle tile
+            // costs zero frames instead of invalidating forever.
+            val flaming = flame && value != "0" && value != "—"
+            val flameScale = if (flaming) {
+                val transition = rememberInfiniteTransition(label = "flame")
+                val animated by transition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = 1.09f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1400),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "flameScale"
+                )
+                animated
+            } else {
+                1f
+            }
+            Box(modifier = Modifier.rotate((flameScale - 1f) * 120f)) {
                 ShapeBadge(
                     symbol = symbol,
                     shapeName = shapeName,

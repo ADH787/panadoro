@@ -12,23 +12,21 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,6 +35,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -44,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.gritnative.app.ui.components.Text
@@ -60,12 +60,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,16 +95,19 @@ import com.gritnative.app.ui.components.CategoryEditorSheet
 import com.gritnative.app.ui.components.DeleteTagSheet
 import com.gritnative.app.ui.components.EntranceWindow
 import com.gritnative.app.ui.components.HabitEditorSheet
+import com.gritnative.app.ui.components.LocalArabic
 import com.gritnative.app.ui.components.LocalEntranceWindow
 import com.gritnative.app.ui.components.RoundIconButton
 import com.gritnative.app.ui.components.ShapeBadge
 import com.gritnative.app.ui.components.StaggeredEntry
 import com.gritnative.app.ui.components.TagEditorSheet
 import com.gritnative.app.ui.components.TaskEditorSheet
+import com.gritnative.app.ui.components.translateText
 import com.gritnative.app.ui.theme.Grit
 import com.gritnative.app.ui.theme.Symbol
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
 
 private data class GritTab(val id: String, val label: String, val symbol: String)
 
@@ -256,8 +264,6 @@ fun AppNav(
     }
 
     val timer = store.timer
-    val now = rememberTimerNow(timer)
-    val secondsLeft = computeSecondsLeft(timer, now)
     val running = timer?.running == true
 
     // One pager holds the five tabs: swiping sideways moves between them, and
@@ -267,9 +273,12 @@ fun AppNav(
         pageCount = { pageOrder.size }
     )
 
-    // A swipe that settles on a page makes it the current tab.
+    // The tab follows the swipe in real time: targetPage flips the moment a
+    // drag makes the neighbouring page dominant, so the header and the nav
+    // bar update while the swipe is still in motion instead of a beat after
+    // it settles.
     LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }.collect { page ->
+        snapshotFlow { pagerState.targetPage }.collect { page ->
             val id = pageOrder.getOrNull(page) ?: return@collect
             if (id != tab) {
                 settingsOpen = false
@@ -294,7 +303,6 @@ fun AppNav(
                 subtitle = subtitle,
                 settingsOpen = settingsOpen,
                 timer = timer,
-                secondsLeft = secondsLeft,
                 onBack = { settingsOpen = false },
                 onTimerClick = {
                     settingsOpen = false
@@ -334,10 +342,23 @@ fun AppNav(
                             modifier = Modifier.fillMaxSize(),
                             key = { page -> pageOrder[page] }
                         ) { page ->
-                            CompositionLocalProvider(
-                                LocalEntranceWindow provides remember { EntranceWindow() }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        // Pages cross-fade as they take over —
+                                        // no scale, nothing grows or shrinks.
+                                        val distance = abs(
+                                            (pagerState.currentPage - page).toFloat() +
+                                                pagerState.currentPageOffsetFraction
+                                        ).coerceIn(0f, 1f)
+                                        alpha = 1f - 0.35f * distance
+                                    }
                             ) {
-                                when (pageOrder[page]) {
+                                CompositionLocalProvider(
+                                    LocalEntranceWindow provides remember { EntranceWindow() }
+                                ) {
+                                    when (pageOrder[page]) {
                                     "tasks" -> TasksScreen(
                                         store = store,
                                         onNewTask = { sheet = AppSheet.Task("") },
@@ -370,6 +391,7 @@ fun AppNav(
                                         onEditCategory = { sheet = AppSheet.Category(it) },
                                         onDeleteCategory = { pendingCategoryDelete = it }
                                     )
+                                }
                                 }
                             }
                         }
@@ -500,11 +522,14 @@ private fun GritTopBar(
     subtitle: String,
     settingsOpen: Boolean,
     timer: TimerState?,
-    secondsLeft: Int,
     onBack: () -> Unit,
     onTimerClick: () -> Unit,
     onSettings: () -> Unit
 ) {
+    // The wall clock lives here, so a running session only recomposes this
+    // bar (and the focus screen's own clock) — never the pager or the pages.
+    val now = rememberTimerNow(timer)
+    val secondsLeft = computeSecondsLeft(timer, now)
     // The bar keeps a stable height no matter whether the timer chip is
     // showing: the chip is capped well below the bar's own height, so pages
     // never get nudged up and down when a session starts or ends.
@@ -583,7 +608,9 @@ private fun GritTopBar(
                 else MaterialTheme.colorScheme.onTertiaryContainer
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp),
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
@@ -638,46 +665,64 @@ private fun GritBottomNav(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // The Tomato-style floating bar: one tinted pill, every tab an icon, and
-    // the tab you are on becomes a solid button that pops its name open. The
-    // reflow of the widening button is what makes the highlight feel like it
-    // travels between tabs.
-    //
-    // The pill is drawn as a background, not a clipped container: Material
-    // Surface clips its content to its shape, and that clip is what shaved
-    // the corner of a selected end-tab. A background keeps the exact same
-    // look with nothing ever clipped.
+    // The Tomato-style bar: the selected tab's button widens to pop its name
+    // open. The width change is driven by a single animated index — every
+    // slot's width is a fraction of that one value, so the five widths sum
+    // to exactly one slot at every instant and the bar's total width is
+    // constant by construction. The pill itself also gets an explicit fixed
+    // width, so even sub-pixel rounding can never make it breathe.
+    val desiredUnit =
+        ((LocalConfiguration.current.screenWidthDp - 360).coerceIn(0, 160)) / 160f
+    val buttonSize = (52 + 8 * desiredUnit).dp
+    val unit = ((buttonSize.value - 52f) / 8f).coerceIn(0f, 1f)
+    val iconBoxSize = (22 + 3 * unit).dp
+    val symbolSize = (20 + 3 * unit).dp
+    val labelSize = (13 + 1.5 * unit).sp
+    val buttonPad = (buttonSize - iconBoxSize) / 2
+
+    val barGap = 4.dp
+    val barPadding = 8.dp
+    val labelGap = 7.dp
+
+    val arabic = LocalArabic.current
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val baseStyle = LocalTextStyle.current
+    val labelSlotWidth = remember(labelSize, arabic) {
+        with(density) {
+            tabs.maxOf { item ->
+                textMeasurer.measure(
+                    translateText(item.label),
+                    baseStyle.merge(
+                        TextStyle(fontSize = labelSize, fontWeight = FontWeight.SemiBold)
+                    )
+                ).size.width.toDp()
+            } + 8.dp
+        }
+    }
+
+    val selectedIndex = tabs.indexOfFirst { it.id == current }.coerceAtLeast(0)
+    val animatedIndex by animateFloatAsState(
+        targetValue = selectedIndex.toFloat(),
+        animationSpec = tween(260, easing = FastOutSlowInEasing),
+        label = "nav-index"
+    )
+
+    val barWidth = barPadding * 2 + buttonSize * 5 + barGap * 4 + labelGap + labelSlotWidth
+
     Box(
         modifier = modifier
+            .width(barWidth)
             .shadow(12.dp, CircleShape, clip = false)
-            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+        contentAlignment = Alignment.Center
     ) {
-        BoxWithConstraints {
-            // The bar breathes with the screen — a compact 360 dp phone gets
-            // the base size, roomier or lower-density screens get a taller
-            // one — but it must also never outgrow the width it is given.
-            // The five buttons are solved to fit, and if a device is so
-            // narrow that something has to give, the label clips first:
-            // the icons are never the thing that gets cut off.
-            val desiredUnit =
-                ((LocalConfiguration.current.screenWidthDp - 360).coerceIn(0, 160)) / 160f
-            val desiredHeight = (52 + 8 * desiredUnit).dp
-            val desiredLabel = 13f + 1.5f * desiredUnit
-            val labelEstimate = (tabs.maxOf { it.label.length } * desiredLabel * 0.65f).dp
-            val fitHeight = ((maxWidth - 29.dp - labelEstimate) / 5f).coerceAtLeast(0.dp)
-            val buttonHeight = minOf(desiredHeight, fitHeight).coerceIn(44.dp, 64.dp)
-            val unit = ((buttonHeight.value - 52f) / 8f).coerceIn(0f, 1f)
-            val iconBoxSize = (22 + 3 * unit).dp
-            val symbolSize = (20 + 3 * unit).dp
-            val labelSize = (13 + 1.5 * unit).sp
-            // Distance from the button's edge to the icon box.
-            val buttonPad = (buttonHeight - iconBoxSize) / 2
-
-            Row(
-                modifier = Modifier.padding(7.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-            tabs.forEach { item ->
+        Row(
+            modifier = Modifier.padding(barPadding),
+            horizontalArrangement = Arrangement.spacedBy(barGap),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            tabs.forEachIndexed { index, item ->
                 val selected = item.id == current
                 val container by animateColorAsState(
                     targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
@@ -690,18 +735,11 @@ private fun GritBottomNav(
                     animationSpec = tween(220),
                     label = "nav-content"
                 )
-                // The whole button pops with a spring, and the icon inside
-                // carries an extra bit of contrast on top of it.
-                val buttonScale by animateFloatAsState(
-                    targetValue = if (selected) 1.05f else 0.97f,
-                    animationSpec = spring(dampingRatio = 0.45f, stiffness = 380f),
-                    label = "nav-button-scale"
-                )
-                val iconScale by animateFloatAsState(
-                    targetValue = if (selected) 1.16f else 0.9f,
-                    animationSpec = spring(dampingRatio = 0.5f, stiffness = 480f),
-                    label = "nav-icon-scale"
-                )
+                // Single source of truth: this slot's share of the one
+                // animated index. Between two tabs the pair sums to 1.
+                val slotFraction = (1f - abs(animatedIndex - index)).coerceIn(0f, 1f)
+                val gapWidth = labelGap * slotFraction
+                val slotWidth = labelSlotWidth * slotFraction
                 val badge = when (item.id) {
                     "tasks" -> store.openTaskCount().takeIf { it > 0 }?.toString().orEmpty()
                     "focus" -> if (running) "•" else ""
@@ -712,21 +750,18 @@ private fun GritBottomNav(
                     shape = CircleShape,
                     color = container,
                     contentColor = content,
-                    modifier = Modifier
-                        .height(buttonHeight)
-                        .scale(buttonScale)
+                    modifier = Modifier.height(buttonSize)
                 ) {
                     Row(
-                        // Symmetric padding keeps the idle button a perfect
-                        // circle at every size step.
-                        modifier = Modifier.padding(horizontal = buttonPad),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                        // fillMaxHeight keeps the content vertically centred
+                        // in the fixed-height surface at every width.
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(horizontal = buttonPad),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
-                            Modifier
-                                .size(iconBoxSize)
-                                .scale(iconScale),
+                            Modifier.size(iconBoxSize),
                             contentAlignment = Alignment.Center
                         ) {
                             Symbol(
@@ -778,29 +813,26 @@ private fun GritBottomNav(
                                 }
                             }
                         }
-                        AnimatedVisibility(
-                            visible = selected,
-                            enter = expandHorizontally(
-                                spring(dampingRatio = 0.78f, stiffness = 380f)
-                            ) + fadeIn(tween(160)),
-                            exit = shrinkHorizontally(
-                                spring(dampingRatio = 0.82f, stiffness = 460f)
-                            ) + fadeOut(tween(110))
-                        ) {
-                            Text(
-                                text = item.label,
-                                color = content,
-                                fontSize = labelSize,
-                                lineHeight = (labelSize.value + 2.5f).sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Clip
-                            )
+                        if (slotFraction > 0.004f) {
+                            Spacer(Modifier.width(gapWidth))
+                            Box(
+                                modifier = Modifier
+                                    .width(slotWidth)
+                                    .clipToBounds()
+                            ) {
+                                Text(
+                                    text = item.label,
+                                    color = content,
+                                    fontSize = labelSize,
+                                    lineHeight = (labelSize.value + 2.5f).sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }
-            }
             }
         }
     }

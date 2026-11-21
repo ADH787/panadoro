@@ -1,8 +1,26 @@
-# Panadoro 1.9.3
+# Panadoro 1.9.4
 
 Native Kotlin/Jetpack Compose build of the merged Panadoro habit tracker and
 Tomato focus timer. The UI data model and Firebase wire format are compatible
 with the quickshell app, so both clients stay in sync.
+
+## What's new in 1.9.4
+
+- The navigation bar's label slot is driven by a single animated value, so the
+  five slot widths always sum to exactly one slot: the bar's width is constant
+  by construction, at rest and mid-animation alike.
+- Navigation buttons centre their contents properly — a fixed-height Material
+  Surface places content at the top, which put every icon and label high in its
+  circle. The top-bar timer pill gets the same fix.
+- The selected tab's name is measured with the exact style it renders in (the
+  theme's letter-spacing included), so longer labels — Arabic especially — no
+  longer clip.
+- Swiping updates the header and the nav highlight mid-swipe via the pager's
+  target page; pages cross-fade only (no zoom), and the label travel uses a
+  plain tween.
+- Animation budget: a running timer now only recomposes the top-bar pill and
+  the focus clock instead of the whole shell, and the flame stat tile no
+  longer runs an infinite animation while idle.
 
 ## What's new in 1.9.3
 
