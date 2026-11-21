@@ -254,6 +254,55 @@ Singleton {
         return tag;
     }
 
+    function leaderboardPrefs() {
+        const nameAt = Number(Persistent.states.grit?.displayNameUpdatedAt ?? 0);
+        const tagsAt = Number(Persistent.states.grit?.publicTagsUpdatedAt ?? 0);
+        return {
+            displayName: root.displayName,
+            nameUpdatedAt: nameAt,
+            publicTagIds: root.publicTagIds,
+            tagsUpdatedAt: tagsAt,
+            updatedAt: Math.max(nameAt, tagsAt)
+        };
+    }
+
+    function mergeLeaderboardPrefs(local, remote) {
+        const a = local && typeof local === "object" ? local : root.leaderboardPrefs();
+        const b = remote && typeof remote === "object" ? remote : null;
+        if (!b)
+            return a;
+        const nameWinsRemote = Number(b.nameUpdatedAt ?? 0) > Number(a.nameUpdatedAt ?? 0);
+        const tagsWinRemote = Number(b.tagsUpdatedAt ?? 0) > Number(a.tagsUpdatedAt ?? 0);
+        const nameAt = Math.max(Number(a.nameUpdatedAt ?? 0), Number(b.nameUpdatedAt ?? 0));
+        const tagsAt = Math.max(Number(a.tagsUpdatedAt ?? 0), Number(b.tagsUpdatedAt ?? 0));
+        return {
+            displayName: nameWinsRemote ? String(b.displayName ?? "") : String(a.displayName ?? ""),
+            nameUpdatedAt: nameAt,
+            publicTagIds: tagsWinRemote ? Array.from(b.publicTagIds ?? []).map(String)
+                : Array.from(a.publicTagIds ?? []).map(String),
+            tagsUpdatedAt: tagsAt,
+            updatedAt: Math.max(Number(a.updatedAt ?? 0), Number(b.updatedAt ?? 0), nameAt, tagsAt)
+        };
+    }
+
+    function applyLeaderboardPrefs(prefs) {
+        if (!prefs || typeof prefs !== "object")
+            return;
+        const nameAt = Number(prefs.nameUpdatedAt ?? 0);
+        const tagsAt = Number(prefs.tagsUpdatedAt ?? 0);
+        if (nameAt > Number(Persistent.states.grit.displayNameUpdatedAt ?? 0)) {
+            Persistent.states.grit.displayName = String(prefs.displayName ?? "").trim().slice(0, 40);
+            Persistent.states.grit.displayNameUpdatedAt = nameAt;
+        }
+        if (tagsAt > Number(Persistent.states.grit.publicTagsUpdatedAt ?? 0)) {
+            const activeIds = root.activeTags.map(tag => String(tag.id));
+            Persistent.states.grit.publicTagIds = Array.from(prefs.publicTagIds ?? [])
+                .map(String)
+                .filter(id => activeIds.indexOf(id) >= 0);
+            Persistent.states.grit.publicTagsUpdatedAt = tagsAt;
+        }
+    }
+
     function normalizeStore(raw) {
         const data = raw && typeof raw === "object" ? raw : {};
         return {
@@ -267,6 +316,8 @@ Singleton {
                 ? root.dedupeList(data.tags).map(root.normalizeTag) : root.defaultTags(),
             focusSessions: root.sortSessions(root.dedupeList(data.focusSessions)),
             timer: data.timer && typeof data.timer === "object" ? data.timer : null,
+            leaderboard: data.leaderboard && typeof data.leaderboard === "object"
+                ? root.mergeLeaderboardPrefs(root.leaderboardPrefs(), data.leaderboard) : null,
             updatedAt: Number(data.updatedAt ?? 0) || 0,
             device: String(data.device ?? "")
         };
@@ -281,6 +332,8 @@ Singleton {
         root.tags = store.tags;
         root.focusSessions = store.focusSessions;
         root.timer = store.timer;
+        if (store.leaderboard)
+            root.applyLeaderboardPrefs(store.leaderboard);
         root.loaded = true;
         root.ensureTimer();
         root.revision++;
@@ -297,6 +350,7 @@ Singleton {
             tags: root.tags,
             focusSessions: root.focusSessions,
             timer: root.timer,
+            leaderboard: root.leaderboardPrefs(),
             updatedAt: Date.now(),
             device: root.deviceId
         };
@@ -2626,6 +2680,7 @@ Singleton {
             tags: root.mergeRecordLists(a.tags, b.tags),
             focusSessions: root.sortSessions(root.mergeRecordLists(a.focusSessions, b.focusSessions)),
             timer: a.timer,
+            leaderboard: root.mergeLeaderboardPrefs(a.leaderboard, b.leaderboard),
             updatedAt: Date.now(),
             device: root.deviceId
         };
@@ -2649,6 +2704,8 @@ Singleton {
         root.focusSessions = root.sortSessions(root.normalizeList(merged.focusSessions));
         if (merged.timer && typeof merged.timer === "object")
             root.timer = merged.timer;
+        if (merged.leaderboard)
+            root.applyLeaderboardPrefs(merged.leaderboard);
         root.ensureTimer();
         root.revision++;
         root.syncApplying = false;
