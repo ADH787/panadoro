@@ -57,6 +57,7 @@ const defaultSettings = {
   autoSync: true,
   theme: "system",
   language: "",
+  colorProfile: "",
   displayName: "",
   displayNameUpdatedAt: 0,
   publicTagIds: [],

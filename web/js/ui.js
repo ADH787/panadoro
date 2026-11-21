@@ -514,6 +514,12 @@ function authGateHTML() {
             : "Sign in to pick up your habits, tasks and focus where you left them."}</p>
         </div>
         <form class="auth-form" data-form="auth">
+          ${creating ? `
+          <div class="field">
+            <label for="auth-name">Display name</label>
+            <input id="auth-name" data-input="auth-name" type="text" autocomplete="nickname"
+              value="${attr(S.ui.authName || "")}" placeholder="Shown on the focus ranks">
+          </div>` : ""}
           <div class="field">
             <label for="auth-email">Email</label>
             <input id="auth-email" data-input="auth-email" type="email" autocomplete="email"
@@ -836,13 +842,13 @@ function focusPage() {
 
       <div class="panel" ${tagStyle(tag)}>
         <div class="panel-head"><div class="copy"><h3>${esc(tag.name)} tasks</h3><p>Small steps that belong to this tag.</p></div></div>
-        ${tasks.length === 0 ? `<p class="muted" style="font-size:11px">No tasks for this tag yet.</p>` : `
+        ${tasks.length === 0 ? `<p class="muted" style="font-size: 12px">No tasks for this tag yet.</p>` : `
           <div class="task-list">
             ${tasks.map((task) => `
               <div class="task ${task.done ? "done" : ""}" style="padding:8px 10px">
                 <div class="task-main">
                   <button class="task-check" data-action="toggle-task" data-id="${attr(task.id)}">${task.done ? icon("check") : ""}</button>
-                  <div class="task-copy"><div class="task-title" style="font-size:12px">${esc(task.title)}</div></div>
+                  <div class="task-copy"><div class="task-title" style="font-size: 13px">${esc(task.title)}</div></div>
                   <button class="icon-btn small" data-action="edit-task" data-id="${attr(task.id)}">${icon("edit")}</button>
                 </div>
               </div>`).join("")}
@@ -854,20 +860,20 @@ function focusPage() {
       </div>
 
       <div class="panel">
-        <div class="panel-head"><div class="copy"><h3>This week, by tag</h3></div><span class="muted" style="font-size:11px">${fmtMin(focusMinutesInRange(7))}</span></div>
-        ${weekStats.length === 0 ? `<p class="muted" style="font-size:11px">Finish a focus session and its tag will appear here.</p>` : `
+        <div class="panel-head"><div class="copy"><h3>This week, by tag</h3></div><span class="muted" style="font-size: 12px">${fmtMin(focusMinutesInRange(7))}</span></div>
+        ${weekStats.length === 0 ? `<p class="muted" style="font-size: 12px">Finish a focus session and its tag will appear here.</p>` : `
           <div class="bar-list">
             ${weekStats.map((stat) => `
               <div class="bar-list-row" ${tagStyle(stat.tag)}>
-                <span>${esc(stat.name)}</span><b style="font-size:10px;color:var(--accent)">${fmtMin(stat.seconds / 60)}</b>
+                <span>${esc(stat.name)}</span><b style="font-size: 11px;color:var(--accent)">${fmtMin(stat.seconds / 60)}</b>
                 <div class="track"><span style="width:${(stat.seconds / weekMax) * 100}%"></span></div>
               </div>`).join("")}
           </div>`}
       </div>
 
       <div class="panel">
-        <div class="panel-head"><div class="copy"><h3>Recent sessions</h3></div><span class="muted" style="font-size:11px">${fmtMin(todayFocusMinutes())} today</span></div>
-        ${recent.length === 0 ? `<p class="muted" style="font-size:11px">No sessions yet. The first one is the hardest.</p>` : `
+        <div class="panel-head"><div class="copy"><h3>Recent sessions</h3></div><span class="muted" style="font-size: 12px">${fmtMin(todayFocusMinutes())} today</span></div>
+        ${recent.length === 0 ? `<p class="muted" style="font-size: 12px">No sessions yet. The first one is the hardest.</p>` : `
           <div>${recent.map((session) => {
             const tag = tagById(session.tagId);
             return `<div class="session-row" ${tagStyle(tag)}>
@@ -943,7 +949,7 @@ function statsPage() {
 
       <div class="panel">
         <div class="panel-head"><div class="copy"><h3>Focus split</h3><p>Focused time divided between tags</p></div></div>
-        ${focusSlices.length === 0 ? `<p class="muted" style="font-size:11px">No focus time in this range yet.</p>` : donutHTML(focusSlices, donutCenter(focusMinutes))}
+        ${focusSlices.length === 0 ? `<p class="muted" style="font-size: 12px">No focus time in this range yet.</p>` : donutHTML(focusSlices, donutCenter(focusMinutes))}
       </div>
 
       <div class="panel">
@@ -952,7 +958,7 @@ function statsPage() {
           ${dayParts.map((part) => `
             <div class="bar-list-row" style="--accent:var(--tertiary)">
               <span>${part.label} <small class="muted">${part.range}</small></span>
-              <b style="font-size:10px">${fmtMin(Math.round(part.seconds / 60))}</b>
+              <b style="font-size: 11px">${fmtMin(Math.round(part.seconds / 60))}</b>
               <div class="track"><span style="width:${(part.seconds / dayPartMax) * 100}%"></span></div>
             </div>`).join("")}
         </div>
@@ -966,11 +972,11 @@ function statsPage() {
 
       <div class="panel">
         <div class="panel-head"><div class="copy"><h3>Habit consistency</h3></div></div>
-        ${habitStats(range).length === 0 ? `<p class="muted" style="font-size:11px">Add a habit to see its consistency here.</p>` : habitStats(range).map((stat) => `
+        ${habitStats(range).length === 0 ? `<p class="muted" style="font-size: 12px">Add a habit to see its consistency here.</p>` : habitStats(range).map((stat) => `
           <div class="habit-stat-row" ${tagStyle({ accent: "primary", color: "" })}>
             <div class="habit-icon" style="width:30px;height:30px;border-radius:10px" ${shapeStyle("Cookie4Sided")}>${icon(stat.habit.icon)}</div>
             <div class="name">${esc(stat.name)}</div>
-            <span class="muted" style="font-size:9px">${stat.due ? `${stat.done}/${stat.due}` : "not scheduled"}</span>
+            <span class="muted" style="font-size: 10px">${stat.due ? `${stat.done}/${stat.due}` : "not scheduled"}</span>
             <div class="track"><span style="width:${stat.rate * 100}%;background:${stat.rate >= 1 ? "var(--success)" : "var(--primary)"}"></span></div>
             ${stat.streak > 0 ? `<span class="pill priority-1">${icon("flame")} ${stat.streak}</span>` : ""}
           </div>`).join("")}
@@ -1045,7 +1051,7 @@ function donutCenter(minutes) {
 
 function donutHTML(slices, center) {
   const total = slices.reduce((sum, slice) => sum + Number(slice.value ?? 0), 0);
-  if (total <= 0) return `<p class="muted" style="font-size:11px">No focus time yet.</p>`;
+  if (total <= 0) return `<p class="muted" style="font-size: 12px">No focus time yet.</p>`;
   const circumference = 2 * Math.PI * 54;
   let offset = 0;
   const rings = slices.map((slice) => {
@@ -1130,18 +1136,17 @@ function ranksPage() {
 
       ${!S.auth.signedIn ? `
         <div class="panel">
-          <div class="panel-head"><div class="copy"><h3>The ranks are a shared room</h3><p>Sign in, choose a display name and flip the tags you want to share. Private tags stay on this device.</p></div></div>
+          <div class="panel-head"><div class="copy"><h3>The ranks are a shared room</h3><p>Sign in, pick the display name you want on the ranks, and flip the tags you want to share. Private tags stay on this device.</p></div></div>
           <button class="btn filled" style="width:100%" data-action="open-auth">${icon("logout")} Sign in or create an account</button>
         </div>` : ""}
 
-      ${S.board.loading ? `<div class="loading-line"><span class="spinner"></span> Listening to the other devices…</div>` : ""}
       ${S.board.error ? `<div class="error-line">${esc(S.board.error)}</div>` : ""}
 
       ${boardPending ? ranksSkeletonHTML() : `
         ${podium.length > 0 ? `<div class="podium">${podium.map((entry) => podiumCard(entry, period)).join("")}</div>` : ""}
 
         ${ranked.length > 0 ? `
-          <div class="row" style="margin-top:4px"><h2 style="flex:1">Everyone</h2><span class="muted" style="font-size:10.5px">${ranked.length} account${ranked.length === 1 ? "" : "s"}</span></div>
+          <div class="row" style="margin-top:4px"><h2 style="flex:1">Everyone</h2><span class="muted" style="font-size: 11.5px">${ranked.length} account${ranked.length === 1 ? "" : "s"}</span></div>
           <div class="rank-list">
             ${ranked.map((entry, index) => rankRow(entry, index, max, period)).join("")}
           </div>` : `
@@ -1156,14 +1161,6 @@ function ranksPage() {
 
       ${S.auth.signedIn ? `
         <div class="panel">
-          <div class="panel-head"><div class="copy"><h3>How you appear</h3><p>A display name for the ranks. Your email is never published.</p></div></div>
-          <form class="row" data-form="rank-name">
-            <div class="field" style="flex:1"><input name="displayName" value="${attr(S.settings.displayName || "")}" placeholder="${attr(effectiveDisplayName())}" maxlength="40"></div>
-            <button class="btn filled" type="submit">${icon("check")} Save</button>
-          </form>
-        </div>
-
-        <div class="panel">
           <div class="panel-head"><div class="copy"><h3>Public tags</h3><p>Flip a tag on to share its focus time for today, this week and this month.</p></div></div>
           <div class="public-list">
             ${activeTags().map((tag) => {
@@ -1175,10 +1172,10 @@ function ranksPage() {
               </div>`;
             }).join("")}
           </div>
-          <p class="muted" style="font-size:9.5px;margin-top:9px">${S.settings.publicTagIds.length} of ${activeTags().length} tags public · habits, tasks and notes are never uploaded to the board.</p>
+          <p class="muted" style="font-size: 10.5px;margin-top:9px">${S.settings.publicTagIds.length} of ${activeTags().length} tags public · habits, tasks and notes are never uploaded to the board.</p>
         </div>` : ""}
 
-      <p class="muted" style="text-align:center;font-size:9.5px;margin-top:4px">${updated ? `Updated ${updated} · the board refreshes every minute` : "Waiting for the first sync."}</p>
+      <p class="muted" style="text-align:center;font-size: 10.5px;margin-top:4px">${updated ? `Updated ${updated} · the board refreshes every minute` : "Waiting for the first sync."}</p>
       <div style="height:30px"></div>
     </div>`;
 }
@@ -1240,7 +1237,7 @@ function settingsPage() {
       <div class="panel">
         <div class="panel-head"><div class="copy"><h3>Week</h3><p>Used by streaks and the weekly view</p></div></div>
         <div class="row wrap">
-          <span style="flex:1;font-size:12px">Week starts on</span>
+          <span style="flex:1;font-size: 13px">Week starts on</span>
           <div class="segmented small" style="min-width:190px">
             <button class="${S.settings.weekStartMonday ? "active" : ""}" data-action="week-start" data-value="monday">Monday</button>
             <button class="${!S.settings.weekStartMonday ? "active" : ""}" data-action="week-start" data-value="sunday">Sunday</button>
@@ -1251,25 +1248,31 @@ function settingsPage() {
       <div class="panel">
         <div class="panel-head"><div class="copy"><h3>Today</h3></div></div>
         <div class="row" style="margin-bottom:12px">
-          <span style="flex:1;font-size:12px">Show completed habits</span>
+          <span style="flex:1;font-size: 13px">Show completed habits</span>
           <button class="switch ${S.settings.showCompleted ? "on" : ""}" data-action="toggle-show-completed" aria-label="Show completed habits"></button>
         </div>
         <div class="row">
-          <span style="flex:1;font-size:12px">Live sync between devices</span>
+          <span style="flex:1;font-size: 13px">Live sync between devices</span>
           <button class="switch ${S.settings.autoSync ? "on" : ""}" data-action="toggle-auto-sync" aria-label="Live sync"></button>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-head"><div class="copy"><h3>Appearance</h3><p>Dynamic Material colour in the desktop shell; a calm forest palette here.</p></div></div>
+        <div class="panel-head"><div class="copy"><h3>Appearance</h3><p>Forest, ocean, amber, rose, violet or slate — a Material palette on every surface.</p></div></div>
         <div class="row wrap">
-          <span style="flex:1;font-size:12px">Theme</span>
+          <span style="flex:1;font-size: 13px">Theme</span>
           <div class="segmented small" style="min-width:230px">
             ${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([id, label]) => `<button class="${S.settings.theme === id ? "active" : ""}" data-action="set-theme" data-value="${id}">${label}</button>`).join("")}
           </div>
         </div>
         <div class="row wrap" style="margin-top:12px">
-          <span style="flex:1;font-size:12px">Language</span>
+          <span style="flex:1;font-size: 13px">Colour profile</span>
+          <div class="segmented small" style="flex-wrap:wrap;min-width:280px">
+            ${[["forest", "Forest"], ["ocean", "Ocean"], ["amber", "Amber"], ["rose", "Rose"], ["violet", "Violet"], ["slate", "Slate"]].map(([id, label]) => `<button class="${(S.settings.colorProfile || "forest") === id ? "active" : ""}" data-action="set-profile" data-value="${id}">${label}</button>`).join("")}
+          </div>
+        </div>
+        <div class="row wrap" style="margin-top:12px">
+          <span style="flex:1;font-size: 13px">Language</span>
           <div class="segmented small" style="min-width:180px">
             <button class="${currentLanguage() === "en" ? "active" : ""}" data-action="set-language" data-value="en">English</button>
             <button class="${currentLanguage() === "ar" ? "active" : ""}" data-action="set-language" data-value="ar">العربية</button>
@@ -1297,9 +1300,9 @@ function settingsPage() {
       <div class="panel">
         <div class="row" style="gap:12px">
           <div class="habit-icon" style="width:48px;height:48px;border-radius:17px" ${shapeStyle("Cookie12Sided")}>${icon("flame")}</div>
-          <div><h3>Panadoro</h3><p class="muted" style="font-size:10.5px">Habits, tasks and tagged focus · web ${WEB_VERSION}</p></div>
+          <div><h3>Panadoro</h3><p class="muted" style="font-size: 11.5px">Habits, tasks and tagged focus · web ${WEB_VERSION}</p></div>
         </div>
-        <p class="muted" style="font-size:10.5px;margin-top:10px;line-height:1.5">
+        <p class="muted" style="font-size: 11.5px;margin-top:10px;line-height:1.5">
           The web app reads the same private Firestore document as the Android and Quickshell apps, merging record by record. The public board is a separate, opt-in tag mirror.
         </p>
         <a class="btn tonal" style="margin-top:10px" href="https://github.com/ADH787/panadoro" target="_blank" rel="noopener">${icon("open_in_new")} Open project repository</a>
@@ -1314,16 +1317,22 @@ function authSettingsCard(signed) {
       <div class="panel-head"><div class="copy"><h3>Account & sync</h3><p>${esc(S.auth.email)}</p></div>
         <span class="pill ${S.sync.status === "error" ? "overdue" : "priority-1"}">${esc(S.sync.message || (S.auth.signedIn ? "Signed in" : "Local"))}</span>
       </div>
-      <div class="row wrap">
+      <form class="row" data-form="rank-name">
+        <div class="field" style="flex:1"><input name="displayName" value="${attr(S.settings.displayName || "")}" placeholder="${attr(effectiveDisplayName())}" maxlength="40"></div>
+        <button class="btn filled" type="submit">${icon("check")} Save</button>
+      </form>
+      <p class="muted" style="font-size: 11px;margin-top:7px">Display name · shown on the focus ranks. Your email is never published.</p>
+      <div class="row wrap" style="margin-top:10px">
         <button class="btn tonal" data-action="sync">${icon("sync")} Sync now</button>
         <button class="btn ghost" data-action="sign-out">${icon("logout")} Sign out</button>
       </div>
-      ${S.settings.lastSyncAt ? `<p class="muted" style="font-size:9.5px;margin-top:8px">Last sync ${esc(S.settings.lastSyncAt)}</p>` : ""}
+      ${S.settings.lastSyncAt ? `<p class="muted" style="font-size: 11px;margin-top:8px">Last sync ${esc(S.settings.lastSyncAt)}</p>` : ""}
     </div>`;
   }
   return `<div class="panel">
     <div class="panel-head"><div class="copy"><h3>Account & sync</h3><p>Create an account here, then sign in with the same email on your other devices.</p></div></div>
     <form class="stack" data-form="settings-auth">
+      <div class="field"><label>Display name</label><input data-input="auth-name" type="text" autocomplete="nickname" value="${attr(S.ui.authName || "")}" placeholder="Shown on the focus ranks"></div>
       <div class="field-row">
         <div class="field"><label>Email</label><input data-input="auth-email" type="email" autocomplete="email" value="${attr(S.ui.authEmail || "")}" placeholder="you@example.com"></div>
         <div class="field"><label>Password</label><input data-input="auth-password" type="password" autocomplete="current-password" value="${attr(S.ui.authPassword || "")}" placeholder="At least 6 characters"></div>
@@ -1334,7 +1343,7 @@ function authSettingsCard(signed) {
         <button class="btn tonal" type="submit" name="intent" value="create" ${S.auth.busy ? "disabled" : ""}>${icon("person")} Create account</button>
       </div>
     </form>
-    <p class="muted" style="font-size:9.5px;margin-top:9px">Your habits, tasks and focus history stay private to your account.</p>
+    <p class="muted" style="font-size: 10.5px;margin-top:9px">Your habits, tasks and focus history stay private to your account.</p>
   </div>`;
 }
 
@@ -1529,8 +1538,8 @@ export function editTag(id = "") {
         <div class="field"><label>Cycles</label><input name="cycles" type="number" min="1" value="${Number(initial.cycles)}"></div>
       </div>
       <div class="field"><label>Daily goal (minutes, 0 = none)</label><input name="dailyGoalMinutes" type="number" min="0" max="720" value="${Number(initial.dailyGoalMinutes)}"></div>
-      <div class="row"><span style="flex:1;font-size:11.5px">Auto-start breaks</span><input type="checkbox" name="autoStartBreak" ${initial.autoStartBreak !== false ? "checked" : ""}></div>
-      <div class="row"><span style="flex:1;font-size:11.5px">Auto-start next focus</span><input type="checkbox" name="autoStartFocus" ${initial.autoStartFocus === true ? "checked" : ""}></div>
+      <div class="row"><span style="flex:1;font-size: 12.5px">Auto-start breaks</span><input type="checkbox" name="autoStartBreak" ${initial.autoStartBreak !== false ? "checked" : ""}></div>
+      <div class="row"><span style="flex:1;font-size: 12.5px">Auto-start next focus</span><input type="checkbox" name="autoStartFocus" ${initial.autoStartFocus === true ? "checked" : ""}></div>
     `,
     onSubmit(form) {
       const data = formValues(form);
@@ -1580,7 +1589,7 @@ export function editTask(id = "") {
         </div>
       </div>
       <div class="field"><label>Notes</label><textarea name="notes" placeholder="Anything useful for later.">${esc(initial.notes)}</textarea></div>
-      ${task ? `<p class="muted" style="font-size:10px">Subtasks: ${Array.from(task.subtasks ?? []).length}. Expand the task row to add, tick or remove them.</p>` : ""}
+      ${task ? `<p class="muted" style="font-size: 11px">Subtasks: ${Array.from(task.subtasks ?? []).length}. Expand the task row to add, tick or remove them.</p>` : ""}
     `,
     onSubmit(form) {
       const data = formValues(form);
@@ -1634,6 +1643,7 @@ export function applyTheme() {
   const theme = S.settings.theme || "system";
   const dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.documentElement.dataset.profile = S.settings.colorProfile || "forest";
   const color = dark ? "#0b100c" : "#f2efe7";
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", color);
@@ -1904,6 +1914,11 @@ export function bindEvents() {
         S.settings.theme = target.dataset.value || "system";
         saveSettings();
         break;
+      case "set-profile":
+        S.settings.colorProfile = target.dataset.value || "forest";
+        saveSettings();
+        applyTheme();
+        break;
       case "set-language":
         setLanguage(target.dataset.value || "en");
         break;
@@ -2009,6 +2024,11 @@ export function bindEvents() {
         ? await createAccount(S.ui.authEmail, S.ui.authPassword)
         : await signIn(S.ui.authEmail, S.ui.authPassword);
       if (ok) {
+        // The name is saved before the first sync and publish, so the
+        // board's first glimpse of this account already carries it.
+        if (creating && String(S.ui.authName || "").trim()) {
+          setDisplayName(String(S.ui.authName).trim());
+        }
         S.ui.authGate = false;
         S.ui.authPassword = "";
         try { sessionStorage.setItem(AUTH_SKIP_KEY, "1"); } catch (_) {}
@@ -2024,6 +2044,9 @@ export function bindEvents() {
         ? await createAccount(S.ui.authEmail, S.ui.authPassword)
         : await signIn(S.ui.authEmail, S.ui.authPassword);
       if (ok) {
+        if (intent === "create" && String(S.ui.authName || "").trim()) {
+          setDisplayName(String(S.ui.authName).trim());
+        }
         S.ui.authPassword = "";
         toast(intent === "create" ? "Account created" : "Signed in");
         emit("auth");
@@ -2091,7 +2114,7 @@ export function bindEvents() {
           title: "Restore backup?",
           subtitle: "This replaces the current data and uploads the restored snapshot to every device.",
           submitLabel: "Restore & sync",
-          body: `<p class="muted" style="font-size:10.5px;line-height:1.5">Habits, tasks, focus sessions, tags and leaderboard preferences from the backup will be stamped as new edits and synced.</p>`,
+          body: `<p class="muted" style="font-size: 11.5px;line-height:1.5">Habits, tasks, focus sessions, tags and leaderboard preferences from the backup will be stamped as new edits and synced.</p>`,
           onSubmit: () => {
             restoreBackup(parsed);
             closeModal();

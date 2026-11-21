@@ -34,6 +34,7 @@
       const stored = JSON.parse(localStorage.getItem("panadoro.settings.v1") || "{}");
       const dark = stored.theme === "dark" || ((!stored.theme || stored.theme === "system") && matchMedia("(prefers-color-scheme: dark)").matches);
       document.documentElement.dataset.theme = dark ? "dark" : "light";
+      document.documentElement.dataset.profile = stored.colorProfile || "forest";
       const lang = stored.language === "ar" || (!stored.language && navigator.language.toLowerCase().startsWith("ar")) ? "ar" : "en";
       document.documentElement.lang = lang;
       document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";

@@ -227,24 +227,6 @@ Item {
                 }
             }
 
-            RowLayout {
-                Layout.fillWidth: true
-                visible: GritService.leaderboardLoading
-                spacing: GritStyle.gapSmall
-
-                MaterialSymbol {
-                    text: "hourglass_empty"
-                    iconSize: 16
-                    color: GritStyle.colSubtext
-                }
-
-                StyledText {
-                    text: Translation.tr("Listening to the other devices…")
-                    font.pixelSize: GritStyle.textSmall
-                    color: GritStyle.colSubtext
-                }
-            }
-
             StyledText {
                 Layout.fillWidth: true
                 visible: GritService.leaderboardError.length > 0
@@ -589,66 +571,6 @@ Item {
                         wrapMode: Text.WordWrap
                         font.pixelSize: GritStyle.textSmall
                         color: GritStyle.colSubtext
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                visible: GritService.signedIn
-                implicitHeight: nameColumn.implicitHeight + GritStyle.cardPadding * 2
-                radius: GritStyle.radiusLarge
-                color: GritStyle.colSurface
-
-                ColumnLayout {
-                    id: nameColumn
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        top: parent.top
-                        margins: GritStyle.cardPadding
-                    }
-                    spacing: GritStyle.gapSmall
-
-                    StyledText {
-                        text: Translation.tr("How you appear")
-                        font.family: GritStyle.fontTitle
-                        font.variableAxes: GritStyle.axesTitle
-                        font.pixelSize: Appearance.font.pixelSize.large
-                        color: GritStyle.colOnSurface
-                    }
-
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Translation.tr("A display name for the ranks. Your email is never published.")
-                        font.pixelSize: GritStyle.textSmall
-                        color: GritStyle.colSubtext
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: GritStyle.gapSmall
-
-                        ClockFormField {
-                            Layout.fillWidth: true
-                            symbol: "person"
-                            shapeKind: MaterialShape.Shape.Cookie4Sided
-                            caption: Translation.tr("Display name")
-                            placeholder: Translation.tr("Your name")
-                            text: root.nameDraft
-                            onTextChanged: {
-                                if (text !== root.nameDraft)
-                                    root.nameDraft = text;
-                            }
-                            onAccepted: root.saveName()
-                        }
-
-                        ClockButton {
-                            variant: "filled"
-                            symbol: "check"
-                            label: Translation.tr("Save")
-                            onClicked: root.saveName()
-                        }
                     }
                 }
             }
