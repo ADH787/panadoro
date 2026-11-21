@@ -22,7 +22,7 @@ import {
   syncSignature,
   thisWeekDays,
   todayKey,
-} from "./state.js?v=1.9.1";
+} from "./state.js?v=1.9.4";
 
 const PROJECT = "habit-tracker-bd354";
 const API_KEY = "AIzaSyAc97ILytNHNXRbS_EapcllNLd1CcaoLPo";

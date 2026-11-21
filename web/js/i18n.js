@@ -2,8 +2,8 @@
 // post-render pass applies the selected language, so no component has to carry
 // two copies of every sentence.
 
-import { AR } from "./i18n-ar.js?v=1.9.1";
-import { S, saveSettings, emit } from "./state.js?v=1.9.1";
+import { AR } from "./i18n-ar.js?v=1.9.4";
+import { S, saveSettings, emit } from "./state.js?v=1.9.4";
 
 export const LANGUAGES = [
   { id: "en", label: "English" },
