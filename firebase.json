@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "site": "panadoro",
+    "public": "web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  },
+  "firestore": {
+    "database": "default",
+    "rules": "firebase/firestore.rules"
+  }
+}

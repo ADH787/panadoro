@@ -1,0 +1,19 @@
+# Android
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+
+# Web / tooling
+node_modules/
+.DS_Store
+*.log
+
+# Local secrets and personal data
+.env
+*.env
+**/states.json
+**/grit-data.json

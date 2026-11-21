@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_today_label">Panadoro Habits</string>
+    <string name="widget_today_description">Today\'s habits, progress, streaks and one-tap check-ins</string>
+
+
+    <string name="widget_tasks_label">Panadoro Tasks</string>
+    <string name="widget_tasks_description">Today\'s task queue, overdue work and quick completion</string>
+
+    <string name="widget_focus_label">Panadoro Pomodoro</string>
+    <string name="widget_focus_description">A live focus countdown with pause, resume and skip</string>
+
+
+
+
+
+</resources>

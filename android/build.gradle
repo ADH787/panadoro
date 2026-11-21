@@ -1,0 +1,36 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:9.4.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21"
+        classpath "org.jetbrains.kotlin:kotlin-serialization:2.4.21"
+        classpath "org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.4.21"
+    }
+    configurations.classpath {
+        resolutionStrategy {
+            force 'commons-codec:commons-codec:1.22.1'
+            eachDependency { details ->
+                if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name == 'kotlin-stdlib' && details.requested.version == '2.2.10') {
+                    details.useVersion '2.4.21'
+                }
+                if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name == 'kotlin-reflect' && details.requested.version == '2.2.10') {
+                    details.useVersion '2.4.10'
+                }
+                if (details.requested.group == 'org.slf4j' && details.requested.name == 'slf4j-api' && details.requested.version == '1.7.30') {
+                    details.useVersion '2.0.18'
+                }
+            }
+        }
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

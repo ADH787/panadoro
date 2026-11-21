@@ -1,0 +1,109 @@
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+apply plugin: 'org.jetbrains.kotlin.plugin.serialization'
+
+android {
+    namespace 'com.gritnative.app'
+    compileSdk 37
+
+    defaultConfig {
+        applicationId "com.gritnative.app"
+        minSdk 26
+        targetSdk 34
+        versionCode 8
+        versionName "1.8"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            resValue "string", "app_name", "Panadoro Debug"
+        }
+        release {
+            minifyEnabled false
+            // This is a locally distributed build, so it is signed with the
+            // machine's standard Android debug key. It is not a Play Store key.
+            signingConfig signingConfigs.debug
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            resValue "string", "app_name", "Panadoro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
+        resValues true
+    }
+
+    packagingOptions {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+
+    // The locally installed AGP's lint artifact is not published in the
+    // configured repositories; compilation still covers the release build.
+    lint {
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.16.0'
+    implementation 'androidx.activity:activity-compose:1.12.4'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.10.0'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0'
+    implementation 'androidx.navigation:navigation-compose:2.9.7'
+
+    implementation 'androidx.compose.ui:ui:1.12.1'
+    implementation 'androidx.compose.ui:ui-tooling-preview:1.12.1'
+    implementation 'androidx.compose.foundation:foundation:1.12.1'
+    implementation 'androidx.compose.material3:material3:1.5.0-alpha22'
+    implementation 'androidx.compose.runtime:runtime:1.12.1'
+
+    implementation 'androidx.glance:glance-appwidget:1.2.0'
+    implementation 'androidx.glance:glance-material3:1.2.0'
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
+
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    testImplementation 'junit:junit:4.13.2'
+
+    debugImplementation 'androidx.compose.ui:ui-tooling:1.12.1'
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.datastore:datastore-preferences-core:1.2.1'
+        force 'androidx.datastore:datastore-preferences:1.2.1'
+        force 'androidx.datastore:datastore-core:1.2.1'
+        force 'androidx.datastore:datastore:1.2.1'
+        force 'androidx.sqlite:sqlite:2.7.1'
+        force 'androidx.sqlite:sqlite-framework:2.7.1'
+        eachDependency { details ->
+            if (details.requested.group == 'androidx.graphics' && details.requested.name == 'graphics-shapes' && details.requested.version == '1.0.1') {
+                details.useVersion '1.1.0'
+            }
+            if (details.requested.group == 'androidx.lifecycle' && details.requested.name == 'lifecycle-process' && details.requested.version == '2.10.0') {
+                details.useVersion '2.11.0'
+            }
+            if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name == 'kotlin-stdlib-jdk8' && details.requested.version == '1.9.10') {
+                details.useVersion '2.2.10'
+            }
+            if (details.requested.group == 'androidx.compose.material' && details.requested.name in ['material-ripple','material-ripple-android'] && details.requested.version == '1.12.0-alpha03') {
+                details.useVersion '1.12.0-beta01'
+            }
+            if (details.requested.group == 'androidx.startup' && details.requested.name == 'startup-runtime' && details.requested.version == '1.1.1') {
+                details.useVersion '1.2.0'
+            }
+        }
+    }
+}

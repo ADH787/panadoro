@@ -1,0 +1,24 @@
+{
+  "name": "Panadoro",
+  "short_name": "Panadoro",
+  "description": "Habits, tasks and tagged focus in one quiet place.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b100c",
+  "theme_color": "#0b100c",
+  "icons": [
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

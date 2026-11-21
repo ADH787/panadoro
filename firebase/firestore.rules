@@ -1,0 +1,64 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // One private sync document per Firebase account. The document ID is the
+    // user's uid; only that signed-in user can read or write it. Listing and
+    // deleting stay closed.
+    match /panadora/{userId} {
+      allow get: if signedInAs(userId);
+      allow create, update: if signedInAs(userId)
+        && isValidSyncDoc(request.resource.data);
+      allow list, delete: if false;
+    }
+
+    // The leaderboard mirror is public to signed-in accounts, but each account
+    // owns exactly one document and can only change its own. It contains only
+    // the tags a user chose to publish and their focus seconds.
+    match /panadora_leaderboard/{userId} {
+      allow get, list: if request.auth != null;
+      allow create, update: if signedInAs(userId)
+        && isValidLeaderboard(request.resource.data);
+      allow delete: if signedInAs(userId);
+    }
+
+    function signedInAs(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isValidSyncDoc(data) {
+      return data.keys().hasOnly(['payload', 'revision', 'updatedAt'])
+        && data.payload is string
+        && data.payload.size() < 900000
+        && data.revision is int
+        && data.updatedAt is int;
+    }
+
+    function isValidLeaderboard(data) {
+      return data.keys().hasOnly([
+          'displayName', 'nameUpdatedAt', 'tagsUpdatedAt',
+          'dayKey', 'weekKey', 'monthKey', 'updatedAt', 'device', 'tags'
+        ])
+        && data.displayName is string
+        && data.displayName.size() <= 80
+        && data.nameUpdatedAt is int
+        && data.tagsUpdatedAt is int
+        && data.dayKey is string
+        && data.dayKey.size() <= 10
+        && data.weekKey is string
+        && data.weekKey.size() <= 10
+        && data.monthKey is string
+        && data.monthKey.size() <= 7
+        && data.updatedAt is int
+        && data.device is string
+        && data.device.size() <= 64
+        && data.tags is map
+        && data.tags.size() <= 40;
+    }
+
+    // Everything else stays closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
