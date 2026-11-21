@@ -581,7 +581,14 @@ export async function publishLeaderboard() {
       const today = todayKey();
       const weekKey = thisWeekDays()[0] ?? today;
       const monthKey = today.slice(0, 7);
-      const name = effectiveDisplayName();
+      // If the board holds a newer name choice than this client knows about,
+      // publish the board's name instead of our fallback, so a stale client
+      // cannot quietly revert the row while carrying its timestamp forward.
+      const localNameAt = Number(settings.displayNameUpdatedAt ?? 0);
+      const name =
+        remote && Number(remote.nameUpdatedAt ?? 0) > localNameAt
+          ? String(remote.displayName ?? "").trim() || effectiveDisplayName()
+          : effectiveDisplayName();
 
       if (localTags.length === 0) {
         if (!remote) return true;

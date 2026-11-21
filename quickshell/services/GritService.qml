@@ -1974,9 +1974,17 @@ Singleton {
             const fields = {};
             for (const tag of mergedTags)
                 fields[String(tag.id)] = root.leaderboardTagValue(tag);
+            // If the board holds a newer name choice than this client knows
+            // about, publish the board's name instead of our fallback, so a
+            // stale client cannot quietly revert the row while carrying its
+            // timestamp forward.
+            const localNameAt = Number(Persistent.states.grit.displayNameUpdatedAt ?? 0);
+            const boardName = (remote && Number(remote.nameUpdatedAt ?? 0) > localNameAt)
+                ? (String(remote.displayName ?? "").trim() || root.effectiveDisplayName)
+                : root.effectiveDisplayName;
             const body = {
                 fields: {
-                    displayName: { stringValue: root.effectiveDisplayName },
+                    displayName: { stringValue: boardName },
                     nameUpdatedAt: { integerValue: String(Math.max(
                         Number(Persistent.states.grit.displayNameUpdatedAt ?? 0),
                         Number(remote?.nameUpdatedAt ?? 0))) },
