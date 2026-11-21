@@ -23,6 +23,11 @@ published; the score shown is the **combined focus time across all public tags**
 for today, this week or this month. Habits, tasks, notes and private tags never
 leave the private document.
 
+The leaderboard display name and public-tag selection are also stored inside
+the private synced document. Save them once on any device and the other clients
+adopt them on the next sync, with per-field timestamps preventing a stale
+device from undoing a newer choice.
+
 Leaderboard writes are conflict-safe: every client reads the current row,
 keeps the larger total for the same period, keeps the newest display-name and
 public-tag preference, and writes with a `currentDocument.updateTime`
