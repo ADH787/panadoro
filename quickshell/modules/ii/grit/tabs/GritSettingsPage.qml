@@ -479,7 +479,6 @@ Rectangle {
     FileDialog {
         id: backupDialog
         visible: false
-        modal: true
         title: Translation.tr("Save Panadoro backup")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "json"
@@ -490,7 +489,6 @@ Rectangle {
     FileDialog {
         id: importDialog
         visible: false
-        modal: true
         title: Translation.tr("Open Panadoro backup")
         fileMode: FileDialog.OpenFile
         nameFilters: [Translation.tr("JSON files (*.json)")]
