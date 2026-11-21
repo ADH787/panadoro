@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import Quickshell
 import qs
 import qs.services
@@ -350,6 +351,32 @@ Rectangle {
 
                 ClockSettingsRow {
                     first: true
+                    symbol: "download"
+                    title: Translation.tr("Backup JSON")
+                    description: Translation.tr("Save a complete snapshot of habits, tasks, focus history and settings.")
+
+                    ClockButton {
+                        variant: "tonal"
+                        symbol: "download"
+                        label: Translation.tr("Backup…")
+                        onClicked: backupDialog.open()
+                    }
+                }
+
+                ClockSettingsRow {
+                    symbol: "upload"
+                    title: Translation.tr("Import backup")
+                    description: Translation.tr("Restore a backup and upload it to every synced device.")
+
+                    ClockButton {
+                        variant: "tonal"
+                        symbol: "upload"
+                        label: Translation.tr("Restore…")
+                        onClicked: importDialog.open()
+                    }
+                }
+
+                ClockSettingsRow {
                     last: true
                     symbol: "delete_forever"
                     title: Translation.tr("Reset Panadoro data")
@@ -409,7 +436,7 @@ Rectangle {
                             spacing: 0
 
                             StyledText {
-                                text: "Panadoro × Tomato"
+                                text: "Panadoro"
                                 font.family: GritStyle.fontTitle
                                 font.variableAxes: GritStyle.axesTitle
                                 font.pixelSize: Appearance.font.pixelSize.large
@@ -433,49 +460,41 @@ Rectangle {
                         font.pixelSize: GritStyle.textSmall
                         color: GritStyle.colOnSurfaceVariant
                     }
-                }
-            }
 
-            // ── Credits ─────────────────────────────────────────────────
-            ClockSettingsSection {
-                Layout.fillWidth: true
-                Layout.topMargin: GritStyle.gapSmall
-                title: Translation.tr("Credits")
-                symbol: "favorite"
-
-                ClockSettingsRow {
-                    first: true
-                    clickable: true
-                    symbol: "local_fire_department"
-                    title: "Based on Grit · shub39"
-                    description: "github.com/shub39/Grit"
-                    onClicked: Qt.openUrlExternally("https://github.com/shub39/Grit")
-
-                    MaterialSymbol {
-                        text: "open_in_new"
-                        iconSize: 18
-                        color: GritStyle.colSubtext
-                    }
-                }
-
-                ClockSettingsRow {
-                    last: true
-                    clickable: true
-                    symbol: "timer"
-                    title: "Tomato · nsh07"
-                    description: "github.com/nsh07/Tomato"
-                    onClicked: Qt.openUrlExternally("https://github.com/nsh07/Tomato")
-
-                    MaterialSymbol {
-                        text: "open_in_new"
-                        iconSize: 18
-                        color: GritStyle.colSubtext
+                    ClockButton {
+                        Layout.fillWidth: true
+                        Layout.topMargin: GritStyle.gapSmall
+                        variant: "tonal"
+                        symbol: "open_in_new"
+                        label: Translation.tr("Open project repository")
+                        onClicked: Qt.openUrlExternally("https://github.com/ADH787/panadoro")
                     }
                 }
             }
 
             Item { Layout.preferredHeight: GritStyle.gapHuge }
         }
+    }
+
+    FileDialog {
+        id: backupDialog
+        visible: false
+        modal: true
+        title: Translation.tr("Save Panadoro backup")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: [Translation.tr("JSON files (*.json)")]
+        onAccepted: GritService.exportBackup(selectedFile)
+    }
+
+    FileDialog {
+        id: importDialog
+        visible: false
+        modal: true
+        title: Translation.tr("Open Panadoro backup")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [Translation.tr("JSON files (*.json)")]
+        onAccepted: GritService.importBackup(selectedFile)
     }
 
     Timer {

@@ -1,7 +1,7 @@
 {
   "hosting": {
     "site": "panadoro",
-    "public": "web",
+    "public": "public",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -21,6 +21,6 @@
   },
   "firestore": {
     "database": "default",
-    "rules": "firebase/firestore.rules"
+    "rules": "firestore.rules"
   }
 }

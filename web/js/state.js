@@ -1650,13 +1650,53 @@ export function exportData() {
   URL.revokeObjectURL(url);
 }
 
-export async function importData(file) {
-  const text = await file.text();
-  const parsed = JSON.parse(text);
-  applyRemoteStore(parsed);
+export function restoreBackup(raw) {
+  const parsed = normalizeStore(raw);
+  const now = Date.now();
+  function restoreList(imported, current) {
+    const ids = new Set(imported.map((item) => String(item.id ?? "")));
+    const stamped = imported.map((item) => ({
+      ...item,
+      updatedAt: now,
+      device: deviceId,
+    }));
+    const tombstones = current
+      .filter((item) => !ids.has(String(item.id ?? "")))
+      .map((item) => ({ ...item, deleted: true, updatedAt: now, device: deviceId }));
+    return stamped.concat(tombstones);
+  }
+  S.data = normalizeStore({
+    ...parsed,
+    habits: restoreList(parsed.habits, S.data.habits),
+    entries: restoreList(parsed.entries, S.data.entries),
+    tasks: restoreList(parsed.tasks, S.data.tasks),
+    categories: restoreList(parsed.categories, S.data.categories),
+    tags: restoreList(parsed.tags, S.data.tags),
+    focusSessions: sortSessions(restoreList(parsed.focusSessions, S.data.focusSessions)),
+    leaderboard: normalizeLeaderboardPrefs(raw.leaderboard),
+    updatedAt: now,
+    device: deviceId,
+  });
+  if (raw.leaderboard && typeof raw.leaderboard === "object") {
+    S.settings.displayName = String(raw.leaderboard.displayName ?? "").trim().slice(0, 40);
+    S.settings.displayNameUpdatedAt = now;
+    S.settings.publicTagIds = Array.isArray(raw.leaderboard.publicTagIds)
+      ? raw.leaderboard.publicTagIds.map(String)
+      : [];
+    S.settings.publicTagsUpdatedAt = now;
+  }
+  S.data.leaderboard = leaderboardFromSettings();
+  ensureTimer();
+  saveSettings();
   saveNow();
   window.dispatchEvent(new CustomEvent("panadoro:sync-now"));
   emit("import");
+}
+
+export async function importData(file) {
+  const text = await file.text();
+  const parsed = JSON.parse(text);
+  restoreBackup(parsed);
 }
 
 export function accentNames() {

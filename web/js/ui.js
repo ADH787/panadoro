@@ -51,6 +51,7 @@ import {
   relativeDay,
   removeSubtask,
   resetAllData,
+  restoreBackup,
   saveSettings,
   scheduledOn,
   selectTag,
@@ -202,6 +203,8 @@ const ICON_ALIASES = {
   moon: "moon",
   more: "more-horizontal",
   loader: "loader-circle",
+  open_in_new: "external-link",
+  external_link: "external-link",
   celebration: "sparkles",
   done_all: "circle-check",
   focus: "timer",
@@ -1282,8 +1285,8 @@ function settingsPage() {
       <div class="panel">
         <div class="panel-head"><div class="copy"><h3>Data</h3><p>Local export is a complete JSON snapshot, including tombstones.</p></div></div>
         <div class="inline-actions">
-          <button class="btn tonal" data-action="export-data">${icon("download")} Export JSON</button>
-          <button class="btn ghost" data-action="import-data">${icon("upload")} Import JSON</button>
+          <button class="btn tonal" data-action="export-data">${icon("download")} Backup JSON</button>
+          <button class="btn ghost" data-action="import-data">${icon("upload")} Import backup</button>
           <button class="btn ghost" data-action="hard-reload">${icon("refresh")} Reload fresh</button>
           <button class="btn ${resetArmed ? "danger" : "ghost"}" data-action="reset-data">${icon(resetArmed ? "warning" : "reset")} ${resetArmed ? "Press again to erase" : "Reset…"}</button>
           <input id="import-file" type="file" accept="application/json" hidden>
@@ -1294,11 +1297,12 @@ function settingsPage() {
       <div class="panel">
         <div class="row" style="gap:12px">
           <div class="habit-icon" style="width:48px;height:48px;border-radius:17px" ${shapeStyle("Cookie12Sided")}>${icon("flame")}</div>
-          <div><h3>Panadoro × Tomato</h3><p class="muted" style="font-size:10.5px">Habits, tasks and tagged focus · web ${WEB_VERSION}</p></div>
+          <div><h3>Panadoro</h3><p class="muted" style="font-size:10.5px">Habits, tasks and tagged focus · web ${WEB_VERSION}</p></div>
         </div>
         <p class="muted" style="font-size:10.5px;margin-top:10px;line-height:1.5">
           The web app reads the same private Firestore document as the Android and Quickshell apps, merging record by record. The public board is a separate, opt-in tag mirror.
         </p>
+        <a class="btn tonal" style="margin-top:10px" href="https://github.com/ADH787/panadoro" target="_blank" rel="noopener">${icon("open_in_new")} Open project repository</a>
       </div>
       <div style="height:30px"></div>
     </div>`;
@@ -2082,8 +2086,18 @@ export function bindEvents() {
       const file = target.files?.[0];
       if (!file) return;
       try {
-        await importData(file);
-        toast("Snapshot imported");
+        const parsed = JSON.parse(await file.text());
+        showModal({
+          title: "Restore backup?",
+          subtitle: "This replaces the current data and uploads the restored snapshot to every device.",
+          submitLabel: "Restore & sync",
+          body: `<p class="muted" style="font-size:10.5px;line-height:1.5">Habits, tasks, focus sessions, tags and leaderboard preferences from the backup will be stamped as new edits and synced.</p>`,
+          onSubmit: () => {
+            restoreBackup(parsed);
+            closeModal();
+            toast("Backup restored and uploaded");
+          },
+        });
       } catch (_) {
         toast("That file is not a valid Panadoro snapshot");
       }

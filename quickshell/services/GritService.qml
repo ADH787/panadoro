@@ -411,6 +411,25 @@ Singleton {
         onTriggered: storeFile.reload()
     }
 
+    FileView {
+        id: backupFile
+        path: ""
+        atomicWrites: true
+    }
+
+    FileView {
+        id: importFile
+        path: ""
+        onLoaded: {
+            try {
+                root.restoreFromBackup(JSON.parse(importFile.text()));
+            } catch (error) {
+                console.warn("[Grit] Could not restore backup:", error);
+            }
+        }
+        onLoadFailed: error => console.warn("[Grit] Could not read backup:", error)
+    }
+
     Timer {
         id: minuteTimer
         interval: 30000
@@ -2710,6 +2729,64 @@ Singleton {
         root.revision++;
         root.syncApplying = false;
         root.saveSoon();
+    }
+
+    // ── Backup / restore ────────────────────────────────────────────────
+
+    function exportBackup(fileUrl) {
+        const payload = JSON.stringify(root.snapshot(), null, 2);
+        backupFile.path = fileUrl;
+        Qt.callLater(() => {
+            try {
+                backupFile.setText(payload);
+            } catch (error) {
+                console.warn("[Grit] Could not save backup:", error);
+            }
+        });
+    }
+
+    function importBackup(fileUrl) {
+        importFile.path = fileUrl;
+        importFile.reload();
+    }
+
+    function restoreFromBackup(raw) {
+        if (!raw || typeof raw !== "object")
+            return;
+        const parsed = root.normalizeStore(raw);
+        const now = Date.now();
+        const dev = root.deviceId;
+        const restore = (imported, current) => {
+            const ids = {};
+            const stamped = Array.from(imported ?? []).map(item => {
+                const copy = Object.assign({}, item, { updatedAt: now, device: dev });
+                ids[String(copy.id ?? "")] = true;
+                return copy;
+            });
+            const tombstones = Array.from(current ?? [])
+                .filter(item => !ids[String(item.id ?? "")])
+                .map(item => Object.assign({}, item, { deleted: true, updatedAt: now, device: dev }));
+            return stamped.concat(tombstones);
+        };
+        root.habits = restore(parsed.habits, root.habits);
+        root.entries = restore(parsed.entries, root.entries);
+        root.tasks = restore(parsed.tasks, root.tasks);
+        root.categories = restore(parsed.categories, root.categories);
+        root.tags = restore(parsed.tags, root.tags);
+        root.focusSessions = root.sortSessions(restore(parsed.focusSessions, root.focusSessions));
+        root.timer = parsed.timer && typeof parsed.timer === "object"
+            ? parsed.timer : root.makeTimer(parsed.tags.find(tag => !tag.deleted)?.id ?? "", "focus", 0, false);
+        if (raw.leaderboard && typeof raw.leaderboard === "object") {
+            Persistent.states.grit.displayName = String(raw.leaderboard.displayName ?? "").trim().slice(0, 40);
+            Persistent.states.grit.displayNameUpdatedAt = now;
+            Persistent.states.grit.publicTagIds = Array.from(raw.leaderboard.publicTagIds ?? []).map(String);
+            Persistent.states.grit.publicTagsUpdatedAt = now;
+        }
+        root.revision++;
+        root.ensureTimer();
+        root.saveNow();
+        root.syncSoon();
+        root.syncNow();
     }
 
     // ── Reset ───────────────────────────────────────────────────────────
