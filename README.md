@@ -33,6 +33,17 @@ keeps the larger total for the same period, keeps the newest display-name and
 public-tag preference, and writes with a `currentDocument.updateTime`
 precondition. Concurrent devices retry instead of overwriting each other.
 
+## Midnight-accurate focus stats
+
+A focus session that runs past midnight is split at every local midnight it
+crosses, and each day is credited with the part that actually happened on it:
+23:50→00:20 gives ten minutes to the first day and twenty to the next. The
+split drives every day-bucketed number — today's focus, streaks, the rhythm
+charts, the heatmaps, the time-of-day buckets and the Ranks day/week/month
+totals — and it is exact: a paused session's recorded seconds are spread over
+its wall-clock span in proportion to each part's length, so the parts always
+add back up to the session's recorded duration.
+
 ## Firebase
 
 - Project: `habit-tracker-bd354`
@@ -54,7 +65,7 @@ JAVA_HOME=/path/to/jdk17 ./gradlew :app:assembleRelease
 ```
 
 The signed APK is written to `android/app/build/outputs/apk/release/app-release.apk`.
-The current release is **[1.9.4](https://github.com/ADH787/panadoro/releases/latest)**.
+The current release is **[1.9.5](https://github.com/ADH787/panadoro/releases/latest)**.
 
 ## Quickshell
 
