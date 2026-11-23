@@ -9,9 +9,9 @@ import {
   subscribe,
   tickTimer,
   todayKey,
-} from "./state.js?v=1.9.4";
-import { initCloud, refreshLeaderboard } from "./cloud.js?v=1.9.4";
-import { applyTheme, bindEvents, render } from "./ui.js?v=1.9.4";
+} from "./state.js?v=1.9.5";
+import { initCloud, refreshLeaderboard } from "./cloud.js?v=1.9.5";
+import { applyTheme, bindEvents, render } from "./ui.js?v=1.9.5";
 
 const params = new URLSearchParams(location.search);
 if (params.get("static") === "1") document.documentElement.dataset.static = "true";

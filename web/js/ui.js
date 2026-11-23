@@ -99,7 +99,7 @@ import {
   timerProgress,
   timerRunning,
   timerSecondsLeft,
-} from "./state.js?v=1.9.4";
+} from "./state.js?v=1.9.5";
 
 import {
   clearAuthError,
@@ -110,10 +110,10 @@ import {
   signIn,
   signOut,
   syncNow,
-} from "./cloud.js?v=1.9.4";
-import { ICONS } from "./icons.js?v=1.9.4";
-import morphdom from "./vendor/morphdom.js?v=1.9.4";
-import { applyLanguage, currentLanguage, isRTL, setLanguage, translateDOM, translateText } from "./i18n.js?v=1.9.4";
+} from "./cloud.js?v=1.9.5";
+import { ICONS } from "./icons.js?v=1.9.5";
+import morphdom from "./vendor/morphdom.js?v=1.9.5";
+import { applyLanguage, currentLanguage, isRTL, setLanguage, translateDOM, translateText } from "./i18n.js?v=1.9.5";
 
 const WEB_VERSION = document.querySelector('meta[name="app-version"]')?.content || "1.9.1";
 

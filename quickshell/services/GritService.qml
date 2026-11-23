@@ -1298,6 +1298,54 @@ Singleton {
     }
 
     // ── Focus statistics ────────────────────────────────────────────────
+    /**
+     * Splits a finished session at every local midnight it crosses, so a
+     * session that runs past midnight credits each day with the part that
+     * actually happened on it: 23:50→00:20 becomes ten minutes for the first
+     * day and twenty for the next. Pause gaps are not stored on a finished
+     * session, so the recorded durationSec is spread over the wall-clock span
+     * in proportion to each part's length, and the parts always add back up
+     * to exactly durationSec.
+     */
+    function sessionDayParts(session) {
+        const duration = Math.max(0, Number(session.durationSec ?? 0));
+        if (duration <= 0)
+            return [];
+        const start = Number(session.startedAt ?? 0);
+        const end = Number(session.endedAt ?? 0);
+        if (start <= 0 || end <= start)
+            return [{ key: root.dateKey(new Date(end)), start: end, end: end, seconds: duration }];
+        const bounds = [start];
+        let cursor = new Date(start);
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+        while (cursor.getTime() < end) {
+            bounds.push(cursor.getTime());
+            cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+        }
+        bounds.push(end);
+        const wallTotal = end - start;
+        const out = [];
+        let allocated = 0;
+        for (let i = 0; i < bounds.length - 1; i++) {
+            const partStart = bounds[i];
+            const partEnd = bounds[i + 1];
+            let seconds;
+            if (i === bounds.length - 2) {
+                seconds = duration - allocated;
+            } else {
+                seconds = Math.floor(duration * (partEnd - partStart) / wallTotal);
+                allocated += seconds;
+            }
+            out.push({
+                key: root.dateKey(new Date(partStart)),
+                start: partStart,
+                end: partEnd,
+                seconds: seconds
+            });
+        }
+        return out;
+    }
+
     function sessionsInRange(days, phase) {
         const start = root.dateFromKey(root.addDays(root.todayKey, -(Math.max(1, Number(days ?? 7)) - 1)));
         const startMs = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
@@ -1309,8 +1357,17 @@ Singleton {
     }
 
     function secondsInRange(days, phase) {
-        return root.sessionsInRange(days, phase)
-            .reduce((total, session) => total + Math.max(0, Number(session.durationSec ?? 0)), 0);
+        const keys = root.lastNDays(Math.max(1, Number(days ?? 7)));
+        let total = 0;
+        for (const session of root.activeSessions) {
+            if (phase && String(session.phase) !== String(phase))
+                continue;
+            for (const part of root.sessionDayParts(session)) {
+                if (keys.includes(part.key))
+                    total += part.seconds;
+            }
+        }
+        return total;
     }
 
     function focusMinutesInRange(days) {
@@ -1319,23 +1376,36 @@ Singleton {
 
     readonly property int todayFocusSeconds: {
         root.revision;
-        return root.activeSessions
-            .filter(session => String(session.phase) === "focus" && root.dateKey(new Date(Number(session.endedAt ?? 0))) === root.todayKey)
-            .reduce((total, session) => total + Math.max(0, Number(session.durationSec ?? 0)), 0);
+        let total = 0;
+        for (const session of root.activeSessions) {
+            if (String(session.phase) !== "focus")
+                continue;
+            for (const part of root.sessionDayParts(session)) {
+                if (part.key === root.todayKey)
+                    total += part.seconds;
+            }
+        }
+        return total;
     }
     readonly property int todayFocusMinutes: Math.round(root.todayFocusSeconds / 60)
     readonly property int todayFocusSessions: {
         root.revision;
         return root.activeSessions.filter(session => String(session.phase) === "focus"
-            && root.dateKey(new Date(Number(session.endedAt ?? 0))) === root.todayKey).length;
+            && root.sessionDayParts(session).some(part => part.key === root.todayKey)).length;
     }
     readonly property int weekFocusMinutes: {
         root.revision;
         const days = root.thisWeekDays();
-        return Math.round(root.activeSessions
-            .filter(session => String(session.phase) === "focus"
-                && days.includes(root.dateKey(new Date(Number(session.endedAt ?? 0)))))
-            .reduce((total, session) => total + Number(session.durationSec ?? 0), 0) / 60);
+        let total = 0;
+        for (const session of root.activeSessions) {
+            if (String(session.phase) !== "focus")
+                continue;
+            for (const part of root.sessionDayParts(session)) {
+                if (days.includes(part.key))
+                    total += part.seconds;
+            }
+        }
+        return Math.round(total / 60);
     }
     readonly property int totalFocusMinutes: {
         root.revision;
@@ -1345,17 +1415,19 @@ Singleton {
     }
 
     function focusStreak() {
-        const days = {};
+        const perDay = {};
         for (const session of root.activeSessions) {
-            if (String(session.phase) !== "focus" || Number(session.durationSec ?? 0) < 30)
+            if (String(session.phase) !== "focus")
                 continue;
-            days[root.dateKey(new Date(Number(session.endedAt ?? 0)))] = true;
+            for (const part of root.sessionDayParts(session)) {
+                perDay[part.key] = (perDay[part.key] ?? 0) + Number(part.seconds ?? 0);
+            }
         }
         let cursor = root.todayKey;
-        if (!days[cursor])
+        if (!(perDay[cursor] >= 30))
             cursor = root.addDays(cursor, -1);
         let streak = 0;
-        while (days[cursor] && streak < 3650) {
+        while (perDay[cursor] >= 30 && streak < 3650) {
             streak++;
             cursor = root.addDays(cursor, -1);
         }
@@ -1363,9 +1435,17 @@ Singleton {
     }
 
     function tagSecondsInRange(tagId, days) {
-        return root.sessionsInRange(days, "focus")
-            .filter(session => String(session.tagId ?? "") === String(tagId ?? ""))
-            .reduce((total, session) => total + Math.max(0, Number(session.durationSec ?? 0)), 0);
+        const keys = root.lastNDays(Math.max(1, Number(days ?? 7)));
+        let total = 0;
+        for (const session of root.activeSessions) {
+            if (String(session.phase) !== "focus" || String(session.tagId ?? "") !== String(tagId ?? ""))
+                continue;
+            for (const part of root.sessionDayParts(session)) {
+                if (keys.includes(part.key))
+                    total += part.seconds;
+            }
+        }
+        return total;
     }
 
     function tagTodayMinutes(tagId) {
@@ -1382,7 +1462,10 @@ Singleton {
         for (const session of root.activeSessions) {
             if (String(session.phase) !== "focus" || String(session.tagId ?? "") !== String(tagId ?? ""))
                 continue;
-            dates[root.dateKey(new Date(Number(session.endedAt ?? 0)))] = true;
+            for (const part of root.sessionDayParts(session)) {
+                if (Number(part.seconds ?? 0) > 0)
+                    dates[part.key] = true;
+            }
         }
         let key = root.todayKey;
         if (!dates[key])
@@ -1403,12 +1486,22 @@ Singleton {
     }
 
     function tagStats(days) {
+        const keys = root.lastNDays(Math.max(1, Number(days ?? 7)));
         const totals = {};
-        for (const session of root.sessionsInRange(days, "focus")) {
+        for (const session of root.activeSessions) {
+            if (String(session.phase) !== "focus")
+                continue;
+            let seconds = 0;
+            for (const part of root.sessionDayParts(session)) {
+                if (keys.includes(part.key))
+                    seconds += part.seconds;
+            }
+            if (seconds <= 0)
+                continue;
             const id = String(session.tagId ?? "");
             if (!totals[id])
                 totals[id] = { tagId: id, seconds: 0, sessions: 0 };
-            totals[id].seconds += Math.max(0, Number(session.durationSec ?? 0));
+            totals[id].seconds += seconds;
             totals[id].sessions++;
         }
         const allSeconds = Math.max(1, root.secondsInRange(days, "focus"));
@@ -1436,13 +1529,16 @@ Singleton {
         for (const key of keys)
             index[key] = { date: key, label: root.weekdayName(key, true).slice(0, 2), focus: 0, breaks: 0 };
         for (const session of root.activeSessions) {
-            const key = root.dateKey(new Date(Number(session.endedAt ?? 0)));
-            if (!index[key])
-                continue;
-            if (String(session.phase) === "focus")
-                index[key].focus += Math.max(0, Number(session.durationSec ?? 0));
-            else
-                index[key].breaks += Math.max(0, Number(session.durationSec ?? 0));
+            const isFocus = String(session.phase) === "focus";
+            for (const part of root.sessionDayParts(session)) {
+                const day = index[part.key];
+                if (!day)
+                    continue;
+                if (isFocus)
+                    day.focus += part.seconds;
+                else
+                    day.breaks += part.seconds;
+            }
         }
         return keys.map(key => index[key]);
     }
@@ -1464,18 +1560,19 @@ Singleton {
         for (const session of root.activeSessions) {
             if (String(session.phase) !== "focus")
                 continue;
-            const key = root.dateKey(new Date(Number(session.endedAt ?? 0)));
-            const day = index[key];
-            if (!day)
-                continue;
-            const tagId = String(session.tagId ?? "");
-            let segment = day.segments.find(item => item.tagId === tagId);
-            if (!segment) {
-                segment = { tagId: tagId, tag: root.tagById(tagId), seconds: 0 };
-                day.segments.push(segment);
+            for (const part of root.sessionDayParts(session)) {
+                const day = index[part.key];
+                if (!day)
+                    continue;
+                const tagId = String(session.tagId ?? "");
+                let segment = day.segments.find(item => item.tagId === tagId);
+                if (!segment) {
+                    segment = { tagId: tagId, tag: root.tagById(tagId), seconds: 0 };
+                    day.segments.push(segment);
+                }
+                segment.seconds += part.seconds;
+                day.total += part.seconds;
             }
-            segment.seconds += Math.max(0, Number(session.durationSec ?? 0));
-            day.total += Math.max(0, Number(session.durationSec ?? 0));
         }
         for (const key of keys)
             index[key].segments.sort((a, b) => b.seconds - a.seconds);
@@ -1506,8 +1603,10 @@ Singleton {
             for (const session of root.activeSessions) {
                 if (String(session.phase) !== "focus")
                     continue;
-                if (root.dateKey(new Date(Number(session.endedAt ?? 0))) === key)
-                    value += Math.max(0, Number(session.durationSec ?? 0));
+                for (const part of root.sessionDayParts(session)) {
+                    if (part.key === key)
+                        value += part.seconds;
+                }
             }
             return { date: key, value: value };
         });
@@ -1532,8 +1631,10 @@ Singleton {
                     continue;
                 if (wantedTag.length > 0 && String(session.tagId ?? "") !== wantedTag)
                     continue;
-                if (root.dateKey(new Date(Number(session.endedAt ?? 0))) === key)
-                    value += Math.max(0, Number(session.durationSec ?? 0));
+                for (const part of root.sessionDayParts(session)) {
+                    if (part.key === key)
+                        value += part.seconds;
+                }
             }
             out.push({ date: key, value: value, future: key > root.todayKey });
         }
@@ -1547,10 +1648,37 @@ Singleton {
             { id: "afternoon", label: Translation.tr("Afternoon"), range: "12–18", seconds: 0 },
             { id: "evening", label: Translation.tr("Evening"), range: "18–24", seconds: 0 }
         ];
-        for (const session of root.sessionsInRange(days, "focus")) {
-            const hour = new Date(Number(session.startedAt ?? session.endedAt ?? 0)).getHours();
-            const index = Math.max(0, Math.min(3, Math.floor(hour / 6)));
-            buckets[index].seconds += Math.max(0, Number(session.durationSec ?? 0));
+        const keys = root.lastNDays(Math.max(1, Number(days ?? 7)));
+        for (const session of root.activeSessions) {
+            if (String(session.phase) !== "focus")
+                continue;
+            for (const part of root.sessionDayParts(session)) {
+                if (!keys.includes(part.key))
+                    continue;
+                // A part never crosses midnight, but it can cross a
+                // six-hour boundary; share the part's seconds out over its
+                // slices so a session that drifts past midnight lands in the
+                // right bucket.
+                const wall = Math.max(1, part.end - part.start);
+                let cursor = part.start;
+                let allocated = 0;
+                while (cursor < part.end) {
+                    const local = new Date(cursor);
+                    const dayStart = new Date(local.getFullYear(), local.getMonth(), local.getDate()).getTime();
+                    const slot = Math.max(0, Math.min(3, Math.floor(local.getHours() / 6)));
+                    const boundary = dayStart + (slot + 1) * 6 * 3600000;
+                    const sliceEnd = Math.min(boundary, part.end);
+                    let seconds;
+                    if (sliceEnd >= part.end) {
+                        seconds = part.seconds - allocated;
+                    } else {
+                        seconds = Math.floor(part.seconds * (sliceEnd - cursor) / wall);
+                        allocated += seconds;
+                    }
+                    buckets[slot].seconds += seconds;
+                    cursor = sliceEnd;
+                }
+            }
         }
         return buckets;
     }
@@ -1746,14 +1874,17 @@ Singleton {
                 for (const session of root.activeSessions) {
                     if (String(session.phase) !== "focus" || String(session.tagId ?? "") !== String(tag.id))
                         continue;
-                    const key = root.dateKey(new Date(Number(session.endedAt ?? 0)));
-                    const seconds = Math.max(0, Number(session.durationSec ?? 0));
-                    if (key === root.todayKey)
-                        day += seconds;
-                    if (weekDays.indexOf(key) >= 0)
-                        week += seconds;
-                    if (key >= monthStart && key <= root.todayKey)
-                        month += seconds;
+                    // Split at midnight so a session that crosses into a new
+                    // day only publishes the seconds that belong to each
+                    // period.
+                    for (const part of root.sessionDayParts(session)) {
+                        if (part.key === root.todayKey)
+                            day += part.seconds;
+                        if (weekDays.indexOf(part.key) >= 0)
+                            week += part.seconds;
+                        if (part.key >= monthStart && part.key <= root.todayKey)
+                            month += part.seconds;
+                    }
                 }
                 return {
                     id: String(tag.id),
