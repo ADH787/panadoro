@@ -434,11 +434,13 @@ object LeaderboardService {
             var month = 0L
             for (session in sessions) {
                 if (session.tagId != tag.id) continue
-                val key = dateKey(session.endedAt)
-                val seconds = session.durationSec.coerceAtLeast(0).toLong()
-                if (key == todayKey) day += seconds
-                if (key in weekDays) week += seconds
-                if (key >= monthStart && key <= todayKey) month += seconds
+                // Split at midnight so a session that crosses into a new day
+                // only publishes the seconds that belong to each period.
+                for (part in splitSessionByDay(session)) {
+                    if (part.dayKey == todayKey) day += part.seconds
+                    if (part.dayKey in weekDays) week += part.seconds
+                    if (part.dayKey >= monthStart && part.dayKey <= todayKey) month += part.seconds
+                }
             }
             LeaderboardTag(
                 id = tag.id,

@@ -569,6 +569,64 @@ fun Store.advanceAfter(
 
 // ── Stats ────────────────────────────────────────────────────────────────
 
+/**
+ * One slice of a recorded session, with the local day it belongs to.
+ */
+data class SessionPart(
+    val dayKey: String,
+    val startMs: Long,
+    val endMs: Long,
+    val seconds: Long
+)
+
+/**
+ * Splits a session at every local midnight it crosses, so a session that runs
+ * past midnight credits each day with the part that actually happened on it:
+ * 23:50→00:20 becomes ten minutes for the first day and twenty for the next.
+ *
+ * Pause intervals are not stored on a finished session, so the recorded
+ * [FocusSession.durationSec] is spread over the wall-clock span in proportion
+ * to each part's length; the parts always add back up to exactly durationSec.
+ * A legacy row without a usable span keeps the old attribution: the whole
+ * duration on the day the session ended.
+ */
+fun splitSessionByDay(session: FocusSession): List<SessionPart> {
+    val duration = session.durationSec.coerceAtLeast(0).toLong()
+    if (duration <= 0) return emptyList()
+    val start = session.startedAt
+    val end = session.endedAt
+    if (start <= 0 || end <= start) {
+        return listOf(SessionPart(dateKey(end), end, end, duration))
+    }
+    val zone = ZoneId.systemDefault()
+    val bounds = ArrayList<Long>()
+    bounds.add(start)
+    var day = dateFromKey(dateKey(start))
+    while (true) {
+        val midnight = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        if (midnight >= end) break
+        bounds.add(midnight)
+        day = day.plusDays(1)
+    }
+    bounds.add(end)
+    val wallTotal = end - start
+    val out = ArrayList<SessionPart>(bounds.size - 1)
+    var allocated = 0L
+    for (index in 0 until bounds.size - 1) {
+        val partStart = bounds[index]
+        val partEnd = bounds[index + 1]
+        val seconds = if (index == bounds.size - 2) {
+            duration - allocated
+        } else {
+            val share = duration * (partEnd - partStart) / wallTotal
+            allocated += share
+            share
+        }
+        out.add(SessionPart(dateKey(partStart), partStart, partEnd, seconds))
+    }
+    return out
+}
+
 fun Store.sessionsInRange(days: Int, phase: String? = null, todayKey: String = dateKey()): List<FocusSession> {
     val startMs = startOfDayMillis(addDays(todayKey, -(days.coerceAtLeast(1) - 1)))
     return activeSessions.filter { session ->
@@ -576,28 +634,49 @@ fun Store.sessionsInRange(days: Int, phase: String? = null, todayKey: String = d
     }
 }
 
-fun Store.secondsInRange(days: Int, phase: String? = null, todayKey: String = dateKey()): Long =
-    sessionsInRange(days, phase, todayKey).sumOf { it.durationSec.coerceAtLeast(0).toLong() }
+fun Store.secondsInRange(days: Int, phase: String? = null, todayKey: String = dateKey()): Long {
+    val keys = lastNDays(days, todayKey).toHashSet()
+    var total = 0L
+    for (session in activeSessions) {
+        if (phase != null && session.phase != phase) continue
+        for (part in splitSessionByDay(session)) {
+            if (part.dayKey in keys) total += part.seconds
+        }
+    }
+    return total
+}
 
 fun Store.focusMinutesInRange(days: Int, todayKey: String = dateKey()): Int =
     (secondsInRange(days, "focus", todayKey) / 60.0).roundToInt()
 
-fun Store.todayFocusSeconds(todayKey: String = dateKey()): Int = activeSessions
-    .filter { it.phase == "focus" && dateKey(it.endedAt) == todayKey }
-    .sumOf { it.durationSec.coerceAtLeast(0) }
+fun Store.todayFocusSeconds(todayKey: String = dateKey()): Int {
+    var total = 0L
+    for (session in activeSessions) {
+        if (session.phase != "focus") continue
+        for (part in splitSessionByDay(session)) {
+            if (part.dayKey == todayKey) total += part.seconds
+        }
+    }
+    return total.toInt()
+}
 
 fun Store.todayFocusMinutes(todayKey: String = dateKey()): Int =
     (todayFocusSeconds(todayKey) / 60.0).roundToInt()
 
-fun Store.todayFocusSessions(todayKey: String = dateKey()): Int = activeSessions.count {
-    it.phase == "focus" && dateKey(it.endedAt) == todayKey
+fun Store.todayFocusSessions(todayKey: String = dateKey()): Int = activeSessions.count { session ->
+    session.phase == "focus" && splitSessionByDay(session).any { it.dayKey == todayKey }
 }
 
 fun Store.weekFocusMinutes(todayKey: String = dateKey(), monday: Boolean = true): Int {
-    val days = thisWeekDays(todayKey, monday)
-    return (activeSessions
-        .filter { it.phase == "focus" && dateKey(it.endedAt) in days }
-        .sumOf { it.durationSec.toLong() } / 60.0).roundToInt()
+    val days = thisWeekDays(todayKey, monday).toHashSet()
+    var total = 0L
+    for (session in activeSessions) {
+        if (session.phase != "focus") continue
+        for (part in splitSessionByDay(session)) {
+            if (part.dayKey in days) total += part.seconds
+        }
+    }
+    return (total / 60.0).roundToInt()
 }
 
 fun Store.totalFocusMinutes(): Int = (activeSessions
@@ -605,10 +684,14 @@ fun Store.totalFocusMinutes(): Int = (activeSessions
     .sumOf { it.durationSec.toLong() } / 60.0).roundToInt()
 
 fun Store.focusStreak(todayKey: String = dateKey()): Int {
-    val days = activeSessions
-        .filter { it.phase == "focus" && it.durationSec >= 30 }
-        .map { dateKey(it.endedAt) }
-        .toHashSet()
+    val perDay = HashMap<String, Long>()
+    for (session in activeSessions) {
+        if (session.phase != "focus") continue
+        for (part in splitSessionByDay(session)) {
+            perDay[part.dayKey] = (perDay[part.dayKey] ?: 0L) + part.seconds
+        }
+    }
+    val days = perDay.filterValues { it >= 30 }.keys
     var cursor = todayKey
     if (cursor !in days) cursor = addDays(cursor, -1)
     var streak = 0
@@ -619,10 +702,17 @@ fun Store.focusStreak(todayKey: String = dateKey()): Int {
     return streak
 }
 
-fun Store.tagSecondsInRange(tagId: String, days: Int, todayKey: String = dateKey()): Long =
-    sessionsInRange(days, "focus", todayKey)
-        .filter { it.tagId == tagId }
-        .sumOf { it.durationSec.coerceAtLeast(0).toLong() }
+fun Store.tagSecondsInRange(tagId: String, days: Int, todayKey: String = dateKey()): Long {
+    val keys = lastNDays(days, todayKey).toHashSet()
+    var total = 0L
+    for (session in activeSessions) {
+        if (session.phase != "focus" || session.tagId != tagId) continue
+        for (part in splitSessionByDay(session)) {
+            if (part.dayKey in keys) total += part.seconds
+        }
+    }
+    return total
+}
 
 fun Store.tagTodayMinutes(tagId: String, todayKey: String = dateKey()): Int =
     (tagSecondsInRange(tagId, 1, todayKey) / 60.0).roundToInt()
@@ -633,10 +723,13 @@ fun Store.tagPercent(tagId: String, days: Int, todayKey: String = dateKey()): Fl
 }
 
 fun Store.tagStreak(tagId: String, todayKey: String = dateKey()): Int {
-    val dates = activeSessions
-        .filter { it.phase == "focus" && it.tagId == tagId }
-        .map { dateKey(it.endedAt) }
-        .toHashSet()
+    val dates = HashSet<String>()
+    for (session in activeSessions) {
+        if (session.phase != "focus" || session.tagId != tagId) continue
+        for (part in splitSessionByDay(session)) {
+            if (part.seconds > 0) dates.add(part.dayKey)
+        }
+    }
     var key = todayKey
     if (key !in dates) key = addDays(key, -1)
     var streak = 0
@@ -666,11 +759,17 @@ data class TagStat(
 )
 
 fun Store.tagStats(days: Int, todayKey: String = dateKey()): List<TagStat> {
+    val keys = lastNDays(days, todayKey).toHashSet()
     val totals = LinkedHashMap<String, Pair<Long, Int>>()
-    for (session in sessionsInRange(days, "focus", todayKey)) {
+    for (session in activeSessions) {
+        if (session.phase != "focus") continue
+        val seconds = splitSessionByDay(session)
+            .filter { it.dayKey in keys }
+            .sumOf { it.seconds }
+        if (seconds <= 0) continue
         val id = session.tagId
         val current = totals[id] ?: (0L to 0)
-        totals[id] = (current.first + session.durationSec.coerceAtLeast(0)) to (current.second + 1)
+        totals[id] = (current.first + seconds) to (current.second + 1)
     }
     val allSeconds = secondsInRange(days, "focus", todayKey).coerceAtLeast(1)
     return totals.map { (id, value) ->
@@ -700,12 +799,14 @@ fun Store.dailyFocusSeries(days: Int, todayKey: String = dateKey()): List<DayFoc
     val keys = lastNDays(days, todayKey)
     val index = keys.associateWith { DayFocus(it, weekdayShort(it), 0L, 0L) }.toMutableMap()
     for (session in activeSessions) {
-        val key = dateKey(session.endedAt)
-        val day = index[key] ?: continue
-        index[key] = if (session.phase == "focus") {
-            day.copy(focus = day.focus + session.durationSec.coerceAtLeast(0))
-        } else {
-            day.copy(breaks = day.breaks + session.durationSec.coerceAtLeast(0))
+        val isFocus = session.phase == "focus"
+        for (part in splitSessionByDay(session)) {
+            val day = index[part.dayKey] ?: continue
+            index[part.dayKey] = if (isFocus) {
+                day.copy(focus = day.focus + part.seconds)
+            } else {
+                day.copy(breaks = day.breaks + part.seconds)
+            }
         }
     }
     return keys.mapNotNull { index[it] }
@@ -726,19 +827,19 @@ fun Store.dailyTagFocusSeries(days: Int, todayKey: String = dateKey()): List<Day
     }.toMutableMap()
     for (session in activeSessions) {
         if (session.phase != "focus") continue
-        val key = dateKey(session.endedAt)
-        val day = index[key] ?: continue
-        val tagId = session.tagId
-        val existing = day.segments.firstOrNull { it.tagId == tagId }
-        val seconds = session.durationSec.coerceAtLeast(0).toLong()
-        val segments = if (existing == null) {
-            day.segments + TagSegment(tagId, tagById(tagId), seconds)
-        } else {
-            day.segments.map {
-                if (it.tagId == tagId) it.copy(seconds = it.seconds + seconds) else it
+        for (part in splitSessionByDay(session)) {
+            val day = index[part.dayKey] ?: continue
+            val tagId = session.tagId
+            val existing = day.segments.firstOrNull { it.tagId == tagId }
+            val segments = if (existing == null) {
+                day.segments + TagSegment(tagId, tagById(tagId), part.seconds)
+            } else {
+                day.segments.map {
+                    if (it.tagId == tagId) it.copy(seconds = it.seconds + part.seconds) else it
+                }
             }
+            index[part.dayKey] = day.copy(total = day.total + part.seconds, segments = segments)
         }
-        index[key] = day.copy(total = day.total + seconds, segments = segments)
     }
     return keys.mapNotNull { index[it]?.let { day -> day.copy(segments = day.segments.sortedByDescending { it.seconds }) } }
 }
@@ -769,7 +870,9 @@ fun Store.focusHeatmapWeeks(
         for (session in activeSessions) {
             if (session.phase != "focus") continue
             if (tagId.isNotEmpty() && session.tagId != tagId) continue
-            if (dateKey(session.endedAt) == key) value += session.durationSec.coerceAtLeast(0)
+            for (part in splitSessionByDay(session)) {
+                if (part.dayKey == key) value += part.seconds
+            }
         }
         out.add(HeatCell(key, value, key > todayKey))
     }
@@ -785,11 +888,35 @@ fun Store.timeOfDayStats(days: Int, todayKey: String = dateKey()): List<TimeOfDa
         TimeOfDayStat("afternoon", "Afternoon", "12–18", 0L),
         TimeOfDayStat("evening", "Evening", "18–24", 0L)
     ).toMutableList()
-    for (session in sessionsInRange(days, "focus", todayKey)) {
-        val local = Instant.ofEpochMilli(session.startedAt.takeIf { it > 0 } ?: session.endedAt)
-            .atZone(ZoneId.systemDefault())
-        val idx = (local.hour / 6).coerceIn(0, 3)
-        buckets[idx] = buckets[idx].copy(seconds = buckets[idx].seconds + session.durationSec.coerceAtLeast(0))
+    val keys = lastNDays(days, todayKey).toHashSet()
+    val zone = ZoneId.systemDefault()
+    for (session in activeSessions) {
+        if (session.phase != "focus") continue
+        for (part in splitSessionByDay(session)) {
+            if (part.dayKey !in keys) continue
+            // A part never crosses midnight, but it can cross a six-hour
+            // boundary; share the part's seconds out over its slices so a
+            // session that drifts past midnight lands in the right bucket.
+            val wall = (part.endMs - part.startMs).coerceAtLeast(1)
+            var cursor = part.startMs
+            var allocated = 0L
+            while (cursor < part.endMs) {
+                val local = Instant.ofEpochMilli(cursor).atZone(zone)
+                val dayStartMs = local.toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
+                val slot = (local.hour / 6).coerceIn(0, 3)
+                val boundaryMs = dayStartMs + (slot + 1) * 6 * 3_600_000L
+                val sliceEnd = minOf(boundaryMs, part.endMs)
+                val seconds = if (sliceEnd >= part.endMs) {
+                    part.seconds - allocated
+                } else {
+                    val share = part.seconds * (sliceEnd - cursor) / wall
+                    allocated += share
+                    share
+                }
+                buckets[slot] = buckets[slot].copy(seconds = buckets[slot].seconds + seconds)
+                cursor = sliceEnd
+            }
+        }
     }
     return buckets
 }

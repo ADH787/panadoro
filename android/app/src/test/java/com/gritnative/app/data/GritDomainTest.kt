@@ -464,6 +464,124 @@ class GritDomainTest {
         assertTrue(cells.last().future)
     }
 
+    // ── Midnight session split ──────────────────────────────────────────
+
+    @Test
+    fun `a session crossing midnight is split between its days`() {
+        // 23:50 on the first day to 00:20 on the next: ten minutes before
+        // midnight, twenty minutes after it.
+        val firstDay = "2026-11-23"
+        val secondDay = "2026-11-24"
+        val parts = splitSessionByDay(
+            spannedSession("s-midnight", localMs(firstDay, 23, 50), localMs(secondDay, 0, 20), 1800)
+        )
+
+        assertEquals(2, parts.size)
+        assertEquals(firstDay, parts[0].dayKey)
+        assertEquals(600L, parts[0].seconds)
+        assertEquals(secondDay, parts[1].dayKey)
+        assertEquals(1200L, parts[1].seconds)
+        assertEquals(1800L, parts.sumOf { it.seconds })
+    }
+
+    @Test
+    fun `today totals credit each day with its own portion`() {
+        val firstDay = "2026-11-23"
+        val secondDay = "2026-11-24"
+        val store = emptyStore(device, now).copy(
+            focusSessions = listOf(
+                spannedSession("s-midnight", localMs(firstDay, 23, 50), localMs(secondDay, 0, 20), 1800)
+            )
+        )
+
+        assertEquals(600, store.todayFocusSeconds(firstDay))
+        assertEquals(1200, store.todayFocusSeconds(secondDay))
+        assertEquals(10, store.todayFocusMinutes(firstDay))
+        assertEquals(20, store.todayFocusMinutes(secondDay))
+        // The session itself counts once on each day it touched.
+        assertEquals(1, store.todayFocusSessions(firstDay))
+        assertEquals(1, store.todayFocusSessions(secondDay))
+        // A one-day range only ever counts the seconds that fall inside it.
+        assertEquals(600L, store.secondsInRange(1, "focus", firstDay))
+        assertEquals(1200L, store.secondsInRange(1, "focus", secondDay))
+        assertEquals(1800L, store.secondsInRange(2, "focus", secondDay))
+    }
+
+    @Test
+    fun `a paused midnight session spreads its recorded seconds proportionally`() {
+        val firstDay = "2026-11-23"
+        val secondDay = "2026-11-24"
+        // The wall clock spans thirty minutes, but only fifteen were focused.
+        val parts = splitSessionByDay(
+            spannedSession("s-paused", localMs(firstDay, 23, 50), localMs(secondDay, 0, 20), 900)
+        )
+
+        assertEquals(2, parts.size)
+        assertEquals(300L, parts[0].seconds)
+        assertEquals(600L, parts[1].seconds)
+    }
+
+    @Test
+    fun `a session without a usable span keeps its end-day attribution`() {
+        val parts = splitSessionByDay(
+            FocusSession(
+                id = "s-legacy",
+                phase = "focus",
+                startedAt = 0L,
+                endedAt = localMs("2026-11-24", 0, 20),
+                durationSec = 600,
+                updatedAt = now,
+                device = "seed"
+            )
+        )
+
+        assertEquals(1, parts.size)
+        assertEquals("2026-11-24", parts[0].dayKey)
+        assertEquals(600L, parts[0].seconds)
+    }
+
+    @Test
+    fun `a multi-day session splits once per midnight`() {
+        val parts = splitSessionByDay(
+            spannedSession("s-long", localMs("2026-11-21", 22, 0), localMs("2026-11-23", 2, 0), 28 * 3600)
+        )
+
+        assertEquals(3, parts.size)
+        assertEquals(listOf("2026-11-21", "2026-11-22", "2026-11-23"), parts.map { it.dayKey })
+        assertEquals((28 * 3600).toLong(), parts.sumOf { it.seconds })
+    }
+
+    @Test
+    fun `the focus streak counts both sides of midnight`() {
+        val firstDay = "2026-11-23"
+        val secondDay = "2026-11-24"
+        val store = emptyStore(device, now).copy(
+            focusSessions = listOf(
+                spannedSession("s-midnight", localMs(firstDay, 23, 50), localMs(secondDay, 0, 20), 1800)
+            )
+        )
+
+        assertEquals(2, store.focusStreak(secondDay))
+    }
+
+    @Test
+    fun `time of day buckets follow a session across midnight`() {
+        val firstDay = "2026-11-23"
+        val secondDay = "2026-11-24"
+        val store = emptyStore(device, now).copy(
+            focusSessions = listOf(
+                spannedSession("s-midnight", localMs(firstDay, 23, 50), localMs(secondDay, 0, 20), 1800)
+            )
+        )
+
+        val buckets = store.timeOfDayStats(2, secondDay)
+
+        assertEquals(1200L, buckets.first { it.id == "night" }.seconds)
+        assertEquals(0L, buckets.first { it.id == "morning" }.seconds)
+        assertEquals(0L, buckets.first { it.id == "afternoon" }.seconds)
+        assertEquals(600L, buckets.first { it.id == "evening" }.seconds)
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private fun habit(
@@ -496,6 +614,24 @@ class GritDomainTest {
         device = "seed",
         deleted = deleted
     )
+
+    /** A finished session with a real wall-clock span. */
+    private fun spannedSession(id: String, startMs: Long, endMs: Long, durationSec: Int) = FocusSession(
+        id = id,
+        phase = "focus",
+        startedAt = startMs,
+        endedAt = endMs,
+        durationSec = durationSec,
+        plannedSec = durationSec,
+        completed = true,
+        updatedAt = endMs,
+        device = "seed"
+    )
+
+    /** Local wall-clock milliseconds on [dayKey], independent of the test machine's zone. */
+    private fun localMs(dayKey: String, hour: Int, minute: Int = 0): Long =
+        dateFromKey(dayKey).atTime(hour, minute)
+            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
 
     private fun defaultTag(id: String): Tag =
         defaultTags().first { it.id == id }

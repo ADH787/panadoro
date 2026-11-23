@@ -1,8 +1,22 @@
-# Panadoro 1.9.4
+# Panadoro 1.9.5
 
 Native Kotlin/Jetpack Compose build of the merged Panadoro habit tracker and
 Tomato focus timer. The UI data model and Firebase wire format are compatible
 with the quickshell app, so both clients stay in sync.
+
+## What's new in 1.9.5
+
+- Focus stats are midnight-accurate. A session that runs past midnight is
+  split at every local midnight it crosses, and each day is credited with the
+  part that actually happened on it: 23:50→00:20 now gives ten minutes to the
+  first day and twenty to the next — in today's focus totals and session
+  count, the streak, the rhythm chart, the heatmap, the time-of-day buckets
+  and the Ranks day/week/month leaderboard totals.
+- A paused session spreads its recorded focus seconds over its wall-clock span
+  in proportion to each part's length, so the parts always add back up to
+  exactly the session's recorded duration — paused time is never counted, and
+  range totals clip to the days they cover instead of pulling in whole
+  sessions that only partially overlap them.
 
 ## What's new in 1.9.4
 
