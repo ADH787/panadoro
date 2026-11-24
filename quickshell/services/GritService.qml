@@ -2507,7 +2507,7 @@ Singleton {
         });
     }
 
-    function createAccount(email, password) {
+    function createAccount(email, password, displayName) {
         const clean = String(email ?? "").trim();
         const pass = String(password ?? "");
         if (clean.length === 0 || pass.length === 0) {
@@ -2519,8 +2519,13 @@ Singleton {
             password: pass,
             returnSecureToken: true
         }, data => {
-            if (data)
+            if (data) {
                 root.adoptAuth(data, clean);
+                // The ranks name is chosen at sign-up, like the Android app.
+                const name = String(displayName ?? "").trim().slice(0, 40);
+                if (name.length > 0)
+                    root.setDisplayName(name);
+            }
         });
     }
 

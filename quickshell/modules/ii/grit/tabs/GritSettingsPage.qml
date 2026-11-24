@@ -26,6 +26,19 @@ Rectangle {
     readonly property var gritState: Persistent.states.grit
     property string authEmailInput: ""
     property string authPasswordInput: ""
+    property string authNameInput: ""
+    property string rankNameDraft: GritService.effectiveDisplayName
+
+    /**
+     * The ranks name lives with the account: set it once at sign-up, edit it
+     * here — the same place as the Android app. A re-save always publishes
+     * and re-reads the board, so the newest name wins.
+     */
+    function saveRankName(): void {
+        GritService.setDisplayName(root.rankNameDraft);
+        GritService.publishLeaderboard();
+        GritService.refreshLeaderboard();
+    }
 
     function copy(text, message): void {
         Quickshell.clipboardText = String(text ?? "");
@@ -242,6 +255,36 @@ Rectangle {
                     }
                 }
 
+                // The ranks display name is an account setting here, exactly
+                // like the Android app: edited with the account, not on the
+                // Ranks tab.
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: GritService.signedIn
+                    spacing: GritStyle.gapSmall
+
+                    ClockFormField {
+                        Layout.fillWidth: true
+                        symbol: "person"
+                        shapeKind: MaterialShape.Shape.Cookie4Sided
+                        caption: Translation.tr("Display name")
+                        placeholder: Translation.tr("Your name")
+                        text: root.rankNameDraft
+                        onTextChanged: {
+                            if (text !== root.rankNameDraft)
+                                root.rankNameDraft = text;
+                        }
+                        onAccepted: root.saveRankName()
+                    }
+
+                    ClockButton {
+                        variant: "filled"
+                        symbol: "check"
+                        label: Translation.tr("Save")
+                        onClicked: root.saveRankName()
+                    }
+                }
+
                 ClockSettingsRow {
                     visible: GritService.signedIn
                     symbol: "person"
@@ -260,6 +303,20 @@ Rectangle {
                     Layout.fillWidth: true
                     visible: !GritService.signedIn
                     spacing: GritStyle.gapSmall
+
+                    ClockFormField {
+                        Layout.fillWidth: true
+                        symbol: "person"
+                        shapeKind: MaterialShape.Shape.Cookie4Sided
+                        caption: Translation.tr("Display name")
+                        placeholder: Translation.tr("Your name")
+                        text: root.authNameInput
+                        input.echoMode: TextInput.Normal
+                        onTextChanged: {
+                            if (text !== root.authNameInput)
+                                root.authNameInput = text;
+                        }
+                    }
 
                     ClockFormField {
                         Layout.fillWidth: true
@@ -308,7 +365,11 @@ Rectangle {
                             symbol: "person_add"
                             label: Translation.tr("Create account")
                             enabled: !GritService.authBusy
-                            onClicked: GritService.createAccount(root.authEmailInput, root.authPasswordInput)
+                            onClicked: GritService.createAccount(
+                                root.authEmailInput,
+                                root.authPasswordInput,
+                                root.authNameInput
+                            )
                         }
                     }
 

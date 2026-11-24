@@ -26,7 +26,6 @@ Item {
     signal settingsRequested()
 
     property string period: "week"
-    property string nameDraft: GritService.effectiveDisplayName
 
     readonly property real padding: root.compact ? GritStyle.pagePadding : GritStyle.pagePaddingWide
     readonly property real contentWidth: Math.min(root.layoutWidth - root.padding * 2, 1100)
@@ -98,12 +97,6 @@ Item {
 
     function duration(seconds): string {
         return GritStyle.durationShort(Math.round(Number(seconds ?? 0) / 60));
-    }
-
-    function saveName(): void {
-        GritService.setDisplayName(root.nameDraft);
-        GritService.publishLeaderboard();
-        GritService.refreshLeaderboard();
     }
 
     function togglePublic(tagId): void {
