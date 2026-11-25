@@ -105,10 +105,11 @@ fun TagBarChart(
             // Wider slots get a little more air between the capsule bars.
             val gap = (slot * 0.22f).coerceIn(2.5.dp.toPx(), 6.dp.toPx())
             val barWidth = (slot - gap).coerceAtLeast(1f)
-            val maxValue = maxOf(
-                series.maxOfOrNull { it.total.toFloat() } ?: 0f,
-                goalSeconds.toFloat()
-            ).coerceAtLeast(1f)
+            // Scale to the busiest real day, not the goal, so the chart always
+            // uses its full height instead of sitting half empty under a tall
+            // two-hour goal line.
+            val maxValue = (series.maxOfOrNull { it.total.toFloat() } ?: 0f)
+                .coerceAtLeast(1f)
             val usableHeight = size.height
             for (index in series.indices) {
                 val day = series[index]
@@ -151,7 +152,7 @@ fun TagBarChart(
                     drawn++
                 }
             }
-            if (goalSeconds > 0L) {
+            if (goalSeconds > 0L && goalSeconds.toFloat() <= maxValue) {
                 val y = usableHeight * (1f - goalSeconds.toFloat() / maxValue)
                 drawLine(
                     color = labelColor.copy(alpha = 0.6f * enter.value),
@@ -273,10 +274,11 @@ fun ZoomableRhythmChart(
             val slot = dayWidthPx
             val gap = (slot * 0.22f).coerceIn(1.5.dp.toPx(), 6.dp.toPx())
             val barWidth = (slot - gap).coerceAtLeast(1f)
-            val maxValue = maxOf(
-                series.maxOfOrNull { it.total.toFloat() } ?: 0f,
-                goalSeconds.toFloat()
-            ).coerceAtLeast(1f)
+            // Scale to the busiest real day, not the goal, so the chart always
+            // uses its full height instead of sitting half empty under a tall
+            // two-hour goal line.
+            val maxValue = (series.maxOfOrNull { it.total.toFloat() } ?: 0f)
+                .coerceAtLeast(1f)
             // Only days whose slot intersects the viewport are drawn.
             val firstVisible = floor(scrollPx / slot).toInt().coerceAtLeast(0)
             val lastVisible = ceil((scrollPx + size.width) / slot).toInt()
@@ -314,7 +316,7 @@ fun ZoomableRhythmChart(
                     drawn++
                 }
             }
-            if (goalSeconds > 0L) {
+            if (goalSeconds > 0L && goalSeconds.toFloat() <= maxValue) {
                 val y = chartBottom * (1f - goalSeconds.toFloat() / maxValue)
                 drawLine(
                     color = labelColor.copy(alpha = 0.6f),

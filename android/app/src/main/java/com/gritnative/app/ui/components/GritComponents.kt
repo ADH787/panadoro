@@ -646,9 +646,9 @@ fun ProgressLine(
             .clip(CircleShape)
             .background(track)
     ) {
-        // At zero the bar is completely empty — the old minimum fraction drew
-        // a tiny dot at the start that looked like a stray value.
-        if (animated > 0.0001f) {
+        // Anything that rounds to zero in the UI also draws nothing. The old
+        // minimum fraction turned a few stray seconds into a dot at the start.
+        if (progress.coerceIn(0f, 1f) > 0.005f) {
             Box(
                 Modifier
                     .fillMaxWidth(animated.coerceIn(minFraction, 1f))
@@ -1281,8 +1281,8 @@ fun SettingsSection(
                 ShapeBadge(
                     symbol = symbol,
                     shapeName = "Cookie7Sided",
-                    container = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    content = MaterialTheme.colorScheme.onSurfaceVariant,
+                    container = MaterialTheme.colorScheme.primaryContainer,
+                    content = MaterialTheme.colorScheme.onPrimaryContainer,
                     size = 34.dp,
                     iconSize = 17.dp
                 )
@@ -1331,9 +1331,9 @@ fun SettingsRow(
             symbol = symbol,
             shapeName = "Cookie4Sided",
             container = if (danger) MaterialTheme.colorScheme.errorContainer
-            else MaterialTheme.colorScheme.surfaceContainerHigh,
+            else MaterialTheme.colorScheme.primaryContainer,
             content = if (danger) MaterialTheme.colorScheme.onErrorContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+            else MaterialTheme.colorScheme.onPrimaryContainer,
             size = 44.dp,
             iconSize = 22.dp
         )

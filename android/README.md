@@ -6,20 +6,21 @@ with the quickshell app, so both clients stay in sync.
 
 ## What's new in 2.0.0
 
-- The interface is quieter: page titles are centred, larger and heavier, page
+- The interface is quieter: page titles are centred and much larger, page
   subtitles and settings descriptions are gone, and the Tasks summary cards
   and Habits stats banner have been removed.
-- Habits and Tasks share a new hero card with only the main sentence and a
+- Habits and Tasks share a hero card with only the main sentence and a
   progress ring. Its watermark shape drifts, spins and bounces inside the card.
 - Tasks are one straight list — no filter rows. Finished tasks and habits stay
   in place and glide to the end instead of disappearing.
-- The Stats rhythm chart always fills its card, Daily hides the charts, and
-  zero progress bars no longer leave a dot at the start.
+- The Stats rhythm chart fills its card horizontally and vertically, Daily
+  hides the charts, and zero progress bars draw nothing at the start.
 - Focus tags live behind a small expand arrow beside the active tag.
 - Settings can hide any tab, including Habits. The last visible tab refuses to
   switch off, so the navigation bar never disappears completely.
-- Settings rows use larger icons, and the Panadoro colour profile uses the
-  exact orange, tomato red and stem green sampled from the app artwork.
+- Settings rows use larger, consistently highlighted icons, and the Panadoro
+  colour profile uses the exact orange, tomato red and stem green sampled from
+  the app artwork.
 - Titan One is the default app-wide display font; Appearance → App font can
   switch the whole app to the phone's system face.
 - The supplied tomato-reading artwork is the launcher icon, fitted unchanged

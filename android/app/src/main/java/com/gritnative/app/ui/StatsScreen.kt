@@ -350,7 +350,7 @@ fun StatsScreen(
                                     } else {
                                         "focused · $rangeLabel · " +
                                             if (shownPeak != null && shownPeak.total > 0) {
-                                                "best ${shownPeak.label}"
+                                                "best ${relativeDay(shownPeak.date)}"
                                             } else {
                                                 "no sessions yet"
                                             }
@@ -382,7 +382,7 @@ fun StatsScreen(
                         }
                         if (shownTag != null && shownGoal > 0 && !breaks) {
                             ProgressLine(
-                                progress = shownProgress,
+                                progress = if (shownToday <= 0) 0f else shownProgress,
                                 color = shownColors.accent,
                                 height = 6.dp,
                                 minFraction = 0.02f
@@ -416,7 +416,7 @@ fun StatsScreen(
                     if (peak != null && peak.total > 0) {
                         MiniPill(
                             symbol = "emoji_events",
-                            text = "peak ${peak.label}",
+                            text = "peak ${relativeDay(peak.date)}",
                             color = rhythmColors.accent
                         )
                     }
