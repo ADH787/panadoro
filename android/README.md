@@ -13,8 +13,9 @@ with the quickshell app, so both clients stay in sync.
   progress ring. Its watermark shape drifts, spins and bounces inside the card.
 - Tasks are one straight list — no filter rows. Finished tasks and habits stay
   in place and glide to the end instead of disappearing.
-- The Stats rhythm chart fills its card horizontally and vertically, Daily
-  hides the charts, and zero progress bars draw nothing at the start.
+- The Stats rhythm chart fills its card horizontally and vertically and cannot
+  zoom out past a full-width fit, so it never leaves a blank area. Daily hides
+  the charts, and zero progress bars draw nothing at the start.
 - Focus tags live behind a small expand arrow beside the active tag.
 - Settings can hide any tab, including Habits. The last visible tab refuses to
   switch off, so the navigation bar never disappears completely.

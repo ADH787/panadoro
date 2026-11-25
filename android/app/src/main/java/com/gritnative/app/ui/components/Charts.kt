@@ -259,10 +259,15 @@ fun ZoomableRhythmChart(
                 .fillMaxWidth()
                 .height(chartHeight + 22.dp)
                 .onSizeChanged { measuredViewport = it.width.toFloat() }
-                .pointerInput(series.size, minDayPx, maxDayPx) {
+                .pointerInput(series.size, minDayPx, maxDayPx, measuredViewport) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         if (dayWidthPx <= 0f) return@detectTransformGestures
-                        dayWidthPx = (dayWidthPx * zoom).coerceIn(minDayPx, maxDayPx)
+                        // Never let the days shrink narrower than the viewport:
+                        // at full zoom-out the whole series fills the box and
+                        // there is no blank space left to pan into.
+                        val zoomFloor = maxOf(minDayPx, measuredViewport / series.size)
+                        val zoomCeiling = maxOf(zoomFloor, maxDayPx)
+                        dayWidthPx = (dayWidthPx * zoom).coerceIn(zoomFloor, zoomCeiling)
                         val content = series.size * dayWidthPx
                         val maxScroll = (content - measuredViewport).coerceAtLeast(0f)
                         scrollPx = (scrollPx - pan.x).coerceIn(0f, maxScroll)
