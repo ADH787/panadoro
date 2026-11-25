@@ -21,8 +21,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.gritnative.app.R
 import com.gritnative.app.data.Category
 import com.gritnative.app.data.Tag
 import com.gritnative.app.data.ThemeMode
@@ -31,12 +35,11 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.pow
 
-/** Rounded system family, which is the closest native match to Grit's type. */
-val GritRoundedFamily: FontFamily = FontFamily(
-    android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.NORMAL)
-)
+/** Titan One is the app-wide default; the phone's own face is the option. */
+val GritDisplayFamily: FontFamily = FontFamily(Font(R.font.titan_one))
 
-private val GritTypography = Typography(fontFamily = GritRoundedFamily)
+private val GritDisplayTypography = Typography(fontFamily = GritDisplayFamily)
+private val GritSystemTypography = Typography(fontFamily = FontFamily.Default)
 
 private val GritShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
@@ -106,13 +109,22 @@ fun GritTheme(
     val profiled = if (dynamicProfile) base else applyColorProfile(base, settings.colorProfile, dark)
     val scheme = if (settings.amoled && dark) profiled.amoled() else profiled
     val extras = if (dark) darkExtras(scheme, settings.amoled) else lightExtras(scheme)
+    val typography = if (settings.appFont == "system") GritSystemTypography
+    else GritDisplayTypography
+    // A single comfortable text scale for the whole app instead of touching
+    // dozens of individual sizes.
+    val baseDensity = LocalDensity.current
+    val roomyDensity = Density(baseDensity.density, baseDensity.fontScale * 1.1f)
 
-    CompositionLocalProvider(LocalGritColors provides extras) {
+    CompositionLocalProvider(
+        LocalGritColors provides extras,
+        LocalDensity provides roomyDensity
+    ) {
         MaterialExpressiveTheme(
             colorScheme = scheme,
             motionScheme = MotionScheme.expressive(),
             shapes = GritShapes,
-            typography = GritTypography,
+            typography = typography,
             content = content
         )
     }
@@ -127,6 +139,7 @@ private data class ColorProfile(
 private val LIGHT_PROFILES = mapOf(
     "ocean" to ColorProfile(0xFF2F5D8C, 0xFFFFFFFF, 0xFFD3E4FA, 0xFF0A2138, 0xFF4B6078, 0xFFFFFFFF, 0xFFD8E3F0, 0xFF0D2233, 0xFF2E6F72, 0xFFFFFFFF, 0xFFC8ECEE, 0xFF063234),
     "amber" to ColorProfile(0xFF7A5A11, 0xFFFFFFFF, 0xFFF8E2B0, 0xFF3A2A00, 0xFF6D5B3F, 0xFFFFFFFF, 0xFFF0E1C8, 0xFF2A1D08, 0xFF4F6450, 0xFFFFFFFF, 0xFFD6E8D7, 0xFF10250F),
+    "panadoro" to ColorProfile(0xFFC92001, 0xFFFFFFFF, 0xFFC92001, 0xFFFFFFFF, 0xFF207402, 0xFFFFFFFF, 0xFF207402, 0xFFFFFFFF, 0xFFFAA700, 0xFF2B1A00, 0xFFFAA700, 0xFF2B1A00),
     "rose" to ColorProfile(0xFF8C3B52, 0xFFFFFFFF, 0xFFFFD9E2, 0xFF3B0718, 0xFF74565E, 0xFFFFFFFF, 0xFFFFD9E2, 0xFF2E111A, 0xFF82643D, 0xFFFFFFFF, 0xFFF5DFB8, 0xFF2D1E00),
     "violet" to ColorProfile(0xFF63558C, 0xFFFFFFFF, 0xFFE8DEFF, 0xFF1A0F3D, 0xFF625A70, 0xFFFFFFFF, 0xFFE8DFF2, 0xFF1D1628, 0xFF7A5868, 0xFFFFFFFF, 0xFFFFD8E8, 0xFF33101F),
     "slate" to ColorProfile(0xFF4A5C66, 0xFFFFFFFF, 0xFFCDE7F4, 0xFF071E28, 0xFF50606A, 0xFFFFFFFF, 0xFFD5E5EC, 0xFF0B1F27, 0xFF5D5B7A, 0xFFFFFFFF, 0xFFE4E0F5, 0xFF1C1838)
@@ -135,6 +148,7 @@ private val LIGHT_PROFILES = mapOf(
 private val DARK_PROFILES = mapOf(
     "ocean" to ColorProfile(0xFFA8C8F0, 0xFF0D2A46, 0xFF2B4765, 0xFFD3E4FA, 0xFFB8C7DA, 0xFF243342, 0xFF39485B, 0xFFD8E3F0, 0xFF96D2D5, 0xFF063234, 0xFF235053, 0xFFC8ECEE),
     "amber" to ColorProfile(0xFFE8C36A, 0xFF3A2A00, 0xFF5B471C, 0xFFF8E2B0, 0xFFD6C5A8, 0xFF3A2D1A, 0xFF4C3F2B, 0xFFF0E1C8, 0xFFB5CDB7, 0xFF10250F, 0xFF33452F, 0xFFD6E8D7),
+    "panadoro" to ColorProfile(0xFFC92001, 0xFFFFFFFF, 0xFFC92001, 0xFFFFFFFF, 0xFF207402, 0xFFFFFFFF, 0xFF207402, 0xFFFFFFFF, 0xFFFAA700, 0xFF2B1A00, 0xFFFAA700, 0xFF2B1A00),
     "rose" to ColorProfile(0xFFFFB1C8, 0xFF3B0718, 0xFF6E2942, 0xFFFFD9E2, 0xFFE3BDC6, 0xFF422A31, 0xFF5A3C44, 0xFFFFD9E2, 0xFFE5C48D, 0xFF3B2A07, 0xFF5B4522, 0xFFF5DFB8),
     "violet" to ColorProfile(0xFFCBBEFF, 0xFF1A0F3D, 0xFF4A3D73, 0xFFE8DEFF, 0xFFCBC2DA, 0xFF332C3E, 0xFF473F55, 0xFFE8DFF2, 0xFFE5B9CB, 0xFF3B1022, 0xFF5D3C4C, 0xFFFFD8E8),
     "slate" to ColorProfile(0xFFB1CBD8, 0xFF071E28, 0xFF324852, 0xFFCDE7F4, 0xFFB8C9D2, 0xFF1C3039, 0xFF394A52, 0xFFD5E5EC, 0xFFC6C2E0, 0xFF1C1838, 0xFF45435F, 0xFFE4E0F5)

@@ -43,6 +43,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import com.gritnative.app.ui.components.GritButton
+import com.gritnative.app.ui.components.GritButtonStyle
 import com.gritnative.app.ui.components.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -407,14 +409,16 @@ fun AuthScreen(
             }
 
             Spacer(Modifier.height(12.dp))
+            // A first-class choice, but compact enough to stay above the
+            // navigation bar on a 9:16 phone without scrolling.
             StaggeredEntry(index = 4) {
-                TextButton(onClick = onSkip) {
-                    Text(
-                        text = "Continue without an account",
-                        color = Grit.colors.subtext,
-                        fontSize = 11.5.sp
-                    )
-                }
+                GritButton(
+                    label = "Continue without an account",
+                    onClick = onSkip,
+                    symbol = "arrow_forward",
+                    style = GritButtonStyle.OUTLINED,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
             StaggeredEntry(index = 5) {
                 Text(

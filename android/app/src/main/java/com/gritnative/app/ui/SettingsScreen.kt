@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -44,7 +45,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
@@ -64,6 +64,7 @@ import com.gritnative.app.data.ThemeMode
 import com.gritnative.app.data.activeCategories
 import com.gritnative.app.data.activeHabits
 import com.gritnative.app.data.categoryById
+import com.gritnative.app.timer.FocusDnd
 import com.gritnative.app.ui.components.FormChip
 import com.gritnative.app.ui.components.GritButton
 import com.gritnative.app.ui.components.GritButtonStyle
@@ -110,6 +111,7 @@ fun SettingsScreen(
         mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
     }
     var exactAlarmsEnabled by remember { mutableStateOf(canScheduleExactAlarms(context)) }
+    var hasDndAccess by remember { mutableStateOf(FocusDnd.hasPolicyAccess(context)) }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
@@ -117,6 +119,12 @@ fun SettingsScreen(
                 notificationsEnabled =
                     NotificationManagerCompat.from(context).areNotificationsEnabled()
                 exactAlarmsEnabled = canScheduleExactAlarms(context)
+                hasDndAccess = FocusDnd.hasPolicyAccess(context)
+                // Never leave the switch on when the system grant is still
+                // missing: FocusDnd would quietly do nothing.
+                if (StoreRepository.currentSettings.focusDnd && !hasDndAccess) {
+                    StoreRepository.setFocusDnd(false)
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -135,10 +143,10 @@ fun SettingsScreen(
         exactAlarmsEnabled = canScheduleExactAlarms(context)
     }
     val exportBackup = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        SaveBackupDocument()
     ) { uri -> if (uri != null) StoreRepository.exportBackup(uri) }
     val importBackup = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        OpenBackupDocument()
     ) { uri -> if (uri != null) StoreRepository.importBackup(uri) }
 
     LaunchedEffect(resetArmed) {
@@ -226,6 +234,20 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(2.dp))
                 SettingsRow(
+                    symbol = "font_download",
+                    title = "App font"
+                )
+                SegmentedSelector(
+                    options = listOf(
+                        SegmentOption("titan", "Titan One"),
+                        SegmentOption("system", "System")
+                    ),
+                    selected = settings.appFont,
+                    onSelect = { StoreRepository.setAppFont(it) },
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+                Spacer(Modifier.height(2.dp))
+                SettingsRow(
                     symbol = "palette",
                     title = "Color profile",
                     description = "Forest, ocean, amber, rose, violet or slate"
@@ -238,6 +260,7 @@ fun SettingsScreen(
                     listOf(
                         "dynamic" to "Dynamic",
                         "forest" to "Forest",
+                        "panadoro" to "Panadoro",
                         "ocean" to "Ocean",
                         "amber" to "Amber",
                         "rose" to "Rose",
@@ -261,6 +284,27 @@ fun SettingsScreen(
                     accentContainer = MaterialTheme.colorScheme.surfaceContainerHighest,
                     accentOn = MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+
+        item(key = "tabs") {
+            SettingsSection(title = "Tabs", symbol = "tab") {
+                listOf(
+                    "today" to ("Habits" to "wb_sunny"),
+                    "tasks" to ("Tasks" to "checklist"),
+                    "focus" to ("Focus" to "psychiatry"),
+                    "stats" to ("Stats" to "monitoring"),
+                    "ranks" to ("Ranks" to "emoji_events")
+                ).forEachIndexed { index, (id, meta) ->
+                    if (index > 0) BoxDivider()
+                    ToggleRow(
+                        symbol = meta.second,
+                        label = meta.first,
+                        description = "",
+                        checked = id !in settings.hiddenTabs,
+                        onCheckedChange = { shown -> StoreRepository.setTabHidden(id, !shown) }
+                    )
+                }
             }
         }
 
@@ -288,18 +332,6 @@ fun SettingsScreen(
             }
         }
 
-        item(key = "today") {
-            SettingsSection(title = "Today", symbol = "checklist") {
-                ToggleRow(
-                    symbol = "visibility",
-                    label = "Show completed habits",
-                    description = "Completed rows stay in the list instead of disappearing",
-                    checked = settings.showCompleted,
-                    onCheckedChange = { StoreRepository.setShowCompleted(it) }
-                )
-            }
-        }
-
         item(key = "alerts") {
             SettingsSection(title = "Alerts", symbol = "notifications") {
                 ToggleRow(
@@ -311,6 +343,35 @@ fun SettingsScreen(
                     accent = MaterialTheme.colorScheme.tertiary,
                     accentContainer = MaterialTheme.colorScheme.tertiaryContainer,
                     accentOn = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                BoxDivider()
+                ToggleRow(
+                    symbol = "do_not_disturb_on",
+                    label = "Do Not Disturb while focusing",
+                    description = if (settings.focusDnd && !hasDndAccess) {
+                        "DND access is missing — turn this on again and allow Panadoro in Android settings"
+                    } else {
+                        "Quiets calls and notifications while a focus phase runs — the session alarm still rings"
+                    },
+                    checked = settings.focusDnd,
+                    onCheckedChange = { enabled ->
+                        StoreRepository.setFocusDnd(enabled)
+                        if (enabled && !hasDndAccess) {
+                            FocusDnd.requestPolicyAccess(context)
+                        }
+                    },
+                    accent = MaterialTheme.colorScheme.error,
+                    accentContainer = MaterialTheme.colorScheme.errorContainer,
+                    accentOn = MaterialTheme.colorScheme.onErrorContainer
+                )
+                BoxDivider()
+                ToggleRow(
+                    symbol = "bedtime",
+                    label = "Always-on display",
+                    description = "While a phase runs, a dim countdown stays on the screen — " +
+                        "it appears by itself after a quiet minute, or use the moon button on the focus stage",
+                    checked = settings.alwaysOnDisplay,
+                    onCheckedChange = { StoreRepository.setAlwaysOnDisplay(it) }
                 )
                 BoxDivider()
                 SettingsRow(
@@ -356,25 +417,11 @@ fun SettingsScreen(
                         }
                     )
                 }
-                Text(
-                    text = "If a session ends silently, check the phone's alarm volume and whether " +
-                        "Do Not Disturb allows alarms.",
-                    color = Grit.colors.subtext,
-                    fontSize = 10.5.sp,
-                    lineHeight = 14.sp
-                )
             }
         }
 
         item(key = "widgets") {
             SettingsSection(title = "Productivity widgets", symbol = "apps") {
-                Text(
-                    text = "Pin live Panadoro surfaces to your home screen. Resize any tile " +
-                        "and it will adapt from a compact glance to a larger dashboard.",
-                    color = Grit.colors.subtext,
-                    fontSize = 10.5.sp,
-                    lineHeight = 14.sp
-                )
                 WidgetCatalog.specs.forEachIndexed { index, spec ->
                     if (index > 0) BoxDivider()
                     SettingsRow(
@@ -394,7 +441,7 @@ fun SettingsScreen(
                                                 context,
                                                 translateText(
                                                     "This launcher did not open the pin dialog. " +
-                                                        "Long-press the home screen and choose Widgets → Grit."
+                                                        "Long-press the home screen and choose Widgets → Panadoro."
                                                 ),
                                                 Toast.LENGTH_LONG
                                             ).show()
@@ -407,13 +454,6 @@ fun SettingsScreen(
                         }
                     )
                 }
-                Text(
-                    text = "Android groups every tile under Panadoro in the system widget picker. " +
-                        "This section is the curated productivity collection.",
-                    color = Grit.colors.subtext,
-                    fontSize = 9.5.sp,
-                    lineHeight = 13.sp
-                )
             }
         }
 
@@ -640,15 +680,6 @@ fun SettingsScreen(
                             lineHeight = 14.sp
                         )
                     }
-
-                    Text(
-                        text = "Create an account here, then sign in with the same email on your " +
-                            "other devices. Your habits, tasks and focus history stay private to " +
-                            "your account.",
-                        color = Grit.colors.subtext,
-                        fontSize = 10.5.sp,
-                        lineHeight = 14.sp
-                    )
                 }
 
                 Spacer(Modifier.height(4.dp))
@@ -658,70 +689,6 @@ fun SettingsScreen(
                     description = "Pushes after each edit and checks for changes every 5 seconds",
                     checked = settings.autoSync,
                     onCheckedChange = { StoreRepository.setAutoSync(it) }
-                )
-            }
-        }
-
-        item(key = "about") {
-            GritPanel {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    ShapeBadge(
-                        symbol = "local_fire_department",
-                        shapeName = "Cookie12Sided",
-                        container = MaterialTheme.colorScheme.primary,
-                        content = MaterialTheme.colorScheme.onPrimary,
-                        size = 52.dp,
-                        iconSize = 26.dp,
-                        filled = true
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Panadoro ${BuildConfig.VERSION_NAME}",
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Habits, tasks and tagged focus in one quiet place",
-                            color = Grit.colors.subtext,
-                            fontSize = 10.5.sp,
-                            lineHeight = 14.sp
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Data is stored locally in grit-store.json and merged record by record when sync is on. " +
-                        "The timer and its sessions live in a foreground service, so closing the app never stops a session.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.5.sp,
-                    lineHeight = 14.sp
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Device ${settings.deviceId}",
-                    color = Grit.colors.subtext,
-                    fontSize = 9.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(8.dp))
-                GritButton(
-                    label = "Open project repository",
-                    onClick = {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://github.com/ADH787/panadoro")
-                            )
-                        )
-                    },
-                    symbol = "open_in_new",
-                    style = GritButtonStyle.TONAL,
-                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -743,7 +710,7 @@ fun SettingsScreen(
                 SettingsRow(
                     symbol = "upload",
                     title = "Import backup",
-                    description = "Restore a backup and upload it to every synced device."
+                    description = "Restore a backup from Downloads; signed-in devices upload it to every client."
                 )
                 GritButton(
                     label = "Choose backup file",
@@ -779,6 +746,47 @@ fun SettingsScreen(
                 )
             }
         }
+
+        item(key = "about") {
+            GritPanel {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ShapeBadge(
+                        symbol = "local_fire_department",
+                        shapeName = "Cookie12Sided",
+                        container = MaterialTheme.colorScheme.primary,
+                        content = MaterialTheme.colorScheme.onPrimary,
+                        size = 52.dp,
+                        iconSize = 26.dp,
+                        filled = true
+                    )
+                    Text(
+                        text = "Panadoro ${BuildConfig.VERSION_NAME}",
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                GritButton(
+                    label = "Open project repository",
+                    onClick = {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://github.com/ADH787/panadoro")
+                            )
+                        )
+                    },
+                    symbol = "open_in_new",
+                    style = GritButtonStyle.TONAL,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
     }
 }
 
@@ -791,6 +799,35 @@ private fun BoxDivider() {
             .padding(horizontal = 8.dp)
             .background(Grit.colors.outline.copy(alpha = 0.18f))
     )
+}
+
+/**
+ * Opens the picker at Downloads first. Downloads is backed by MediaProvider,
+ * which reads ordinary files reliably on every ROM we tested; some Waydroid
+ * images break the internal-storage provider's typed-asset stream. The user
+ * can still browse elsewhere, and StoreRepository has its own fallbacks.
+ */
+private class OpenBackupDocument : ActivityResultContracts.OpenDocument() {
+    override fun createIntent(context: Context, input: Array<String>): Intent {
+        return super.createIntent(context, input).apply {
+            putExtra(
+                DocumentsContract.EXTRA_INITIAL_URI,
+                Uri.parse("content://com.android.providers.downloads.documents/root/downloads")
+            )
+        }
+    }
+}
+
+/** The same Downloads-first hint when saving a backup. */
+private class SaveBackupDocument : ActivityResultContracts.CreateDocument("application/json") {
+    override fun createIntent(context: Context, input: String): Intent {
+        return super.createIntent(context, input).apply {
+            putExtra(
+                DocumentsContract.EXTRA_INITIAL_URI,
+                Uri.parse("content://com.android.providers.downloads.documents/root/downloads")
+            )
+        }
+    }
 }
 
 private fun canScheduleExactAlarms(context: Context): Boolean {

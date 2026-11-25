@@ -4,11 +4,27 @@ Habits, tasks and tagged focus in one quiet place. This repository holds the
 three clients that share the same Firebase backend:
 
 - **Android** (`android/`) — Kotlin/Jetpack Compose APK with a launch login,
-  permanent session, Ranks and a full motion pass.
+  permanent session, Ranks and a full motion pass. **2.0.0** brings the new
+  hero cards, Titan One app font, the tomato artwork icon and the
+  `com.panadoro.app` application id.
 - **Quickshell** (`quickshell/`) — the desktop Panadoro app inside the ii shell.
 - **Web** (`web/`) — the same app in a browser, installed at
   **https://panadoro.web.app**. Flat responsive UI, English/Arabic (RTL),
   skeleton loading and DOM-morphing renders so live sync does not flicker.
+
+## 2.0.0 highlights
+
+- Cleaner tabs: centred larger titles, no subtitles or settings descriptions,
+  and fewer summary cards. Tasks and Habits are one straight list each, with
+  finished rows staying visible and gliding to the end.
+- New Habits/Tasks hero with a live drifting watermark and progress ring.
+- Stats: the rhythm chart fills its card and Daily hides the charts.
+- Focus: tags collapse behind the small arrow beside the active tag.
+- Settings: any tab can be hidden, with a guard that keeps at least one visible;
+  larger row icons; new Panadoro colour profile; App font switch between
+  Titan One (default) and the phone's system font.
+- The supplied tomato-reading artwork is the launcher icon; the app id is
+  `com.panadoro.app` and the build is 2.0.0 (versionCode 25).
 
 ## One account, three clients
 
@@ -65,7 +81,7 @@ JAVA_HOME=/path/to/jdk17 ./gradlew :app:assembleRelease
 ```
 
 The signed APK is written to `android/app/build/outputs/apk/release/app-release.apk`.
-The current release is **[1.9.5](https://github.com/ADH787/panadoro/releases/latest)**.
+The current release is **[2.0.0](https://github.com/ADH787/panadoro/releases/latest)**.
 
 ## Quickshell
 

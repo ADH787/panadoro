@@ -34,7 +34,7 @@ class ToggleHabitAction : ActionCallback {
         val habitId = parameters[HabitIdKey] ?: return
         prepare(context)
         StoreRepository.toggleHabitDone(habitId)
-        WidgetUpdater.refresh(context)
+        WidgetUpdater.updateNow(context)
     }
 }
 
@@ -47,7 +47,7 @@ class ToggleTaskAction : ActionCallback {
         val taskId = parameters[TaskIdKey] ?: return
         prepare(context)
         StoreRepository.toggleTask(taskId)
-        WidgetUpdater.refresh(context)
+        WidgetUpdater.updateNow(context)
     }
 }
 
@@ -59,7 +59,7 @@ class ToggleTimerAction : ActionCallback {
     ) {
         prepare(context)
         StoreRepository.toggleTimer()
-        WidgetUpdater.refresh(context)
+        WidgetUpdater.updateNow(context)
     }
 }
 
@@ -71,7 +71,7 @@ class SkipTimerAction : ActionCallback {
     ) {
         prepare(context)
         StoreRepository.skipTimer()
-        WidgetUpdater.refresh(context)
+        WidgetUpdater.updateNow(context)
     }
 }
 
@@ -83,6 +83,6 @@ class StartFocusAction : ActionCallback {
     ) {
         prepare(context)
         StoreRepository.startFocusNow()
-        WidgetUpdater.refresh(context)
+        WidgetUpdater.updateNow(context)
     }
 }

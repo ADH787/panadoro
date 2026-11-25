@@ -11,6 +11,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.gritnative.app.MainActivity
+import com.gritnative.app.AppForeground
 import com.gritnative.app.R
 import com.gritnative.app.data.StoreRepository
 import com.gritnative.app.data.PhaseCompletion
@@ -60,8 +61,24 @@ object CompletionAlert {
 
     fun notifyCompletion(context: Context, completion: PhaseCompletion) {
         createChannels(context)
-        val soundEnabled = StoreRepository.currentSettings.alarmSound
-        val channel = if (soundEnabled) CHANNEL_ALARM else CHANNEL_SILENT
+        // Only the device that last drove the timer alarms. Every other
+        // signed-in device records the finished phase quietly, so one
+        // session can never ring on the whole account at once.
+        if (completion.ownerDevice.isNotBlank() && completion.ownerDevice != StoreRepository.deviceId) {
+            return
+        }
+        val settings = StoreRepository.currentSettings
+        val inApp = AppForeground.isForeground
+        if (inApp) {
+            // The full-screen overlay owns the moment while the app is on
+            // screen: no completion notification is posted at all, so no
+            // channel can beep or buzz behind it. One ring, one stop button,
+            // and a double alarm is impossible. The background path below
+            // keeps the notification alarm for when the app is not visible.
+            CompletionAlarm.start(context, completion)
+            return
+        }
+        val channel = if (settings.alarmSound) CHANNEL_ALARM else CHANNEL_SILENT
         val finishedFocus = completion.focusCompleted
         val tagName = completion.tag?.name ?: "Focus"
         val title = if (finishedFocus) "Focus complete · $tagName" else "Break complete"
@@ -90,14 +107,17 @@ object CompletionAlert {
             .setAutoCancel(true)
             .setContentIntent(openIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        if (!soundEnabled) builder.setSilent(true)
+        if (!settings.alarmSound) builder.setSilent(true)
         runCatching {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
         }
-        // If notifications are denied or the alarm channel was muted, the
-        // system cannot make a sound. Play the alarm ourselves and keep a
-        // strong reference until it finishes.
-        if (soundEnabled && !notificationAlarmCanSound(context)) {
+        // If notifications are denied, the alarm channel was muted, or our own
+        // focus DND is holding the phone quiet, the notification cannot be the
+        // alarm. Play it ourselves and keep a strong reference until it
+        // finishes.
+        if (settings.alarmSound &&
+            (!notificationAlarmCanSound(context) || FocusDnd.isBlocking)
+        ) {
             SessionAlarmPlayer.play(context)
         }
     }

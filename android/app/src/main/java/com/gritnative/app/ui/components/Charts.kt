@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,7 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -33,6 +37,11 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -45,6 +54,9 @@ import com.gritnative.app.ui.theme.Grit
 import com.gritnative.app.ui.theme.lerpColor
 import com.gritnative.app.ui.theme.tagColors
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -174,6 +186,158 @@ fun TagBarChart(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The rhythm chart with gestures: one finger pans across the days, a pinch
+ * spreads or squeezes them — zooming in fits fewer, larger days, zooming out
+ * fits more. Everything is drawn in a single canvas so zooming never
+ * re-lays-out a row of boxes and cannot flicker; off-screen days are skipped
+ * entirely so even years of history pan smoothly.
+ */
+@Composable
+fun ZoomableRhythmChart(
+    series: List<DayTagFocus>,
+    modifier: Modifier = Modifier,
+    chartHeight: Dp = 158.dp,
+    fallbackColor: Color = MaterialTheme.colorScheme.primary,
+    goalSeconds: Long = 0L,
+    visibleDays: Int = 0
+) {
+    if (series.isEmpty()) return
+    val density = LocalDensity.current
+    val trackColor = Grit.colors.field
+    val labelColor = Grit.colors.subtext
+    val segmentColors = series.map { day ->
+        day.segments.map { segment ->
+            if (segment.tag != null) tagColors(segment.tag).accent else fallbackColor
+        }
+    }
+    val minDayPx = with(density) { 7.dp.toPx() }
+    val maxDayPx = with(density) { 64.dp.toPx() }
+
+    // Pan and zoom live in plain state, and the canvas is the only thing that
+    // redraws — no layout pass runs on a gesture, so nothing can jump.
+    var dayWidthPx by remember(series.size) { mutableFloatStateOf(0f) }
+    var scrollPx by remember(series.size) { mutableFloatStateOf(0f) }
+    var measuredViewport by remember(series.size) { mutableFloatStateOf(0f) }
+
+    // The default view fits a sensible window; scroll starts at the newest
+    // day, so "today" is what you see without touching anything.
+    LaunchedEffect(series.size, measuredViewport > 0f) {
+        if (measuredViewport <= 0f) return@LaunchedEffect
+        if (dayWidthPx <= 0f) {
+            // Never reserve room for days that do not exist: a seven-day
+            // series in a fourteen-day window used to fill only half the box.
+            val window = if (visibleDays > 0) minOf(visibleDays, series.size)
+            else minOf(series.size, 30)
+            // Fit the real days to the full width: no maximum cap here, or a
+            // short range would sit in the corner with empty space beside it.
+            dayWidthPx = (measuredViewport / window.coerceAtLeast(1))
+                .coerceAtLeast(minDayPx)
+        }
+        val content = series.size * dayWidthPx
+        scrollPx = (content - measuredViewport).coerceAtLeast(0f)
+    }
+
+    val labelPaint = remember(labelColor) {
+        android.graphics.Paint().apply {
+            isAntiAlias = true
+            color = labelColor.toArgb()
+            textSize = with(density) { 9.dp.toPx() }
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+
+    Column(modifier = modifier) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(chartHeight + 22.dp)
+                .onSizeChanged { measuredViewport = it.width.toFloat() }
+                .pointerInput(series.size, minDayPx, maxDayPx) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        if (dayWidthPx <= 0f) return@detectTransformGestures
+                        dayWidthPx = (dayWidthPx * zoom).coerceIn(minDayPx, maxDayPx)
+                        val content = series.size * dayWidthPx
+                        val maxScroll = (content - measuredViewport).coerceAtLeast(0f)
+                        scrollPx = (scrollPx - pan.x).coerceIn(0f, maxScroll)
+                    }
+                }
+        ) {
+            if (series.isEmpty() || dayWidthPx <= 0f) return@Canvas
+            val chartBottom = size.height - 22.dp.toPx()
+            val slot = dayWidthPx
+            val gap = (slot * 0.22f).coerceIn(1.5.dp.toPx(), 6.dp.toPx())
+            val barWidth = (slot - gap).coerceAtLeast(1f)
+            val maxValue = maxOf(
+                series.maxOfOrNull { it.total.toFloat() } ?: 0f,
+                goalSeconds.toFloat()
+            ).coerceAtLeast(1f)
+            // Only days whose slot intersects the viewport are drawn.
+            val firstVisible = floor(scrollPx / slot).toInt().coerceAtLeast(0)
+            val lastVisible = ceil((scrollPx + size.width) / slot).toInt()
+                .coerceAtMost(series.lastIndex)
+            for (index in firstVisible..lastVisible) {
+                val day = series[index]
+                val x = index * slot - scrollPx + gap / 2f
+                drawRoundRect(
+                    color = trackColor.copy(alpha = 0.30f),
+                    topLeft = Offset(x, 0f),
+                    size = Size(barWidth, chartBottom),
+                    cornerRadius = CornerRadius(barWidth / 2f)
+                )
+                if (day.total <= 0L) continue
+                val barHeight = chartBottom * (day.total.toFloat() / maxValue)
+                val visibleCount = day.segments.count { it.seconds > 0L }
+                val segmentGap = 2.dp.toPx()
+                val gapsTotal = (visibleCount - 1).coerceAtLeast(0) * segmentGap
+                val colorHeight = (barHeight - gapsTotal).coerceAtLeast(0f)
+                var bottom = chartBottom
+                var drawn = 0
+                day.segments.forEachIndexed { segmentIndex, segment ->
+                    if (segment.seconds <= 0L) return@forEachIndexed
+                    if (drawn > 0) bottom -= segmentGap
+                    val height = (colorHeight * segment.seconds.toFloat() /
+                        day.total.coerceAtLeast(1L)).coerceAtLeast(0.5f)
+                    val color = segmentColors[index].getOrElse(segmentIndex) { fallbackColor }
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(x, bottom - height),
+                        size = Size(barWidth, height),
+                        cornerRadius = CornerRadius(min(barWidth / 2f, height / 2f))
+                    )
+                    bottom -= height
+                    drawn++
+                }
+            }
+            if (goalSeconds > 0L) {
+                val y = chartBottom * (1f - goalSeconds.toFloat() / maxValue)
+                drawLine(
+                    color = labelColor.copy(alpha = 0.6f),
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 1.2.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 6f))
+                )
+            }
+            // Day labels ride the same pan and zoom as the bars, drawn straight
+            // onto the canvas so they can never lag a frame behind.
+            val labelEvery = max(1, ceil(34f / slot).toInt())
+            for (index in firstVisible..lastVisible) {
+                if (index % labelEvery != 0) continue
+                val x = index * slot - scrollPx + slot / 2f
+                if (x < 0f || x > size.width) continue
+                drawContext.canvas.nativeCanvas.drawText(
+                    series[index].label,
+                    x,
+                    size.height - 4.dp.toPx(),
+                    labelPaint
+                )
             }
         }
     }

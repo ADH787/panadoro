@@ -87,6 +87,7 @@ object GritSymbols {
     const val contrast = 60215
     const val wallpaper = 57788
     const val notifications = 59380
+    const val do_not_disturb_on = 57692
     const val translate = 59618
     const val alarm = 59477
     const val battery_alert = 57756
@@ -203,6 +204,7 @@ object GritSymbols {
         "contrast" to 60215,
         "wallpaper" to 57788,
         "notifications" to 59380,
+        "do_not_disturb_on" to 57692,
         "translate" to 59618,
         "alarm" to 59477,
         "battery_alert" to 57756,

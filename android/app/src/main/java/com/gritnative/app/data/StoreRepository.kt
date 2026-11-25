@@ -2,8 +2,10 @@ package com.gritnative.app.data
 
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
 import android.util.Log
 import android.widget.Toast
 import kotlinx.coroutines.CompletableDeferred
@@ -21,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -34,7 +37,13 @@ data class PhaseCompletion(
     val previousPhase: String,
     val next: TimerState,
     val tag: Tag?,
-    val focusCompleted: Boolean
+    val focusCompleted: Boolean,
+    /**
+     * The device that was last driving this timer. Only that device's
+     * completion should alarm; every other signed-in device records the
+     * finished phase quietly.
+     */
+    val ownerDevice: String = ""
 )
 
 /**
@@ -49,11 +58,16 @@ object StoreRepository {
     private const val PREF_DEVICE = "deviceId"
     private const val PREF_THEME = "themeMode"
     private const val PREF_LANGUAGE = "appLanguage"
+    private const val PREF_APP_FONT = "appFont"
     private const val PREF_COLOR_PROFILE = "colorProfile"
     private const val PREF_DYNAMIC = "dynamicColor"
     private const val PREF_AMOLED = "amoled"
     private const val PREF_WEEK_MONDAY = "weekStartMonday"
+    private const val PREF_AOD = "alwaysOnDisplay"
+    private const val PREF_FOCUS_DND = "focusDnd"
+    private const val PREF_AUTH_SKIPPED = "authSkipped"
     private const val PREF_SHOW_COMPLETED = "showCompleted"
+    private const val PREF_HIDDEN_TABS = "hiddenTabs"
     private const val PREF_AUTO_SYNC = "autoSync"
     private const val PREF_ALARM_SOUND = "alarmSound"
     private const val PREF_LAST_SYNC = "lastSyncAt"
@@ -121,13 +135,24 @@ object StoreRepository {
                 deviceId = id,
                 themeMode = theme,
                 language = prefs.getString(PREF_LANGUAGE, "system"),
-                colorProfile = prefs.getString(PREF_COLOR_PROFILE, "dynamic"),
+                appFont = if (prefs.getString(PREF_APP_FONT, "titan") == "system") "system" else "titan",
+                // "tomato" was the old name for this profile; keep the stored
+                // choice working after the rename.
+                colorProfile = prefs.getString(PREF_COLOR_PROFILE, "dynamic")
+                    .let { if (it == "tomato") "panadoro" else it },
                 dynamicColor = prefs.getBool(PREF_DYNAMIC, true),
                 amoled = prefs.getBool(PREF_AMOLED, false),
-                weekStartMonday = prefs.getBool(PREF_WEEK_MONDAY, true),
+                weekStartMonday = prefs.getBool(PREF_WEEK_MONDAY, false),
                 showCompleted = prefs.getBool(PREF_SHOW_COMPLETED, true),
+                hiddenTabs = prefs.getStringSet(PREF_HIDDEN_TABS)
+                    .filter { it in APP_TAB_IDS }
+                    .toSet()
+                    .let { if (it.size >= APP_TAB_IDS.size) it - "today" else it },
                 autoSync = prefs.getBool(PREF_AUTO_SYNC, true),
                 alarmSound = prefs.getBool(PREF_ALARM_SOUND, true),
+                alwaysOnDisplay = prefs.getBool(PREF_AOD, false),
+                focusDnd = prefs.getBool(PREF_FOCUS_DND, false),
+                authSkipped = prefs.getBool(PREF_AUTH_SKIPPED, false),
                 lastSyncAt = prefs.getString(PREF_LAST_SYNC),
                 displayName = prefs.getString(PREF_DISPLAY_NAME),
                 displayNameUpdatedAt = prefs.getString(PREF_DISPLAY_NAME_AT).toLongOrNull() ?: 0L,
@@ -288,9 +313,16 @@ object StoreRepository {
         updateSettings { it.copy(language = clean) }
     }
 
+    fun setAppFont(font: String) {
+        val clean = if (font == "system") "system" else "titan"
+        prefs.putString(PREF_APP_FONT, clean)
+        updateSettings { it.copy(appFont = clean) }
+    }
+
     fun setColorProfile(profile: String) {
-        val clean = profile.takeIf {
-            it in setOf("dynamic", "forest", "ocean", "amber", "rose", "violet", "slate")
+        val requested = if (profile == "tomato") "panadoro" else profile
+        val clean = requested.takeIf {
+            it in setOf("dynamic", "forest", "panadoro", "ocean", "amber", "rose", "violet", "slate")
         } ?: "dynamic"
         prefs.putString(PREF_COLOR_PROFILE, clean)
         prefs.putBool(PREF_DYNAMIC, clean == "dynamic")
@@ -312,9 +344,41 @@ object StoreRepository {
         updateSettings { it.copy(showCompleted = enabled) }
     }
 
+    /** Hide a tab, but never let the bar disappear completely. */
+    fun setTabHidden(tabId: String, hidden: Boolean) {
+        if (tabId !in APP_TAB_IDS) return
+        val current = _settings.value.hiddenTabs
+        if (hidden) {
+            val remaining = APP_TAB_IDS.filterNot { it in current || it == tabId }
+            // The last visible tab simply refuses to switch off.
+            if (remaining.isEmpty()) return
+        }
+        val next = current.toMutableSet()
+        if (hidden) next.add(tabId) else next.remove(tabId)
+        prefs.putStringSet(PREF_HIDDEN_TABS, next)
+        updateSettings { it.copy(hiddenTabs = next) }
+    }
+
     fun setAlarmSound(enabled: Boolean) {
         prefs.putBool(PREF_ALARM_SOUND, enabled)
         updateSettings { it.copy(alarmSound = enabled) }
+    }
+
+    fun setAlwaysOnDisplay(enabled: Boolean) {
+        prefs.putBool(PREF_AOD, enabled)
+        updateSettings { it.copy(alwaysOnDisplay = enabled) }
+    }
+
+    fun setFocusDnd(enabled: Boolean) {
+        prefs.putBool(PREF_FOCUS_DND, enabled)
+        updateSettings { it.copy(focusDnd = enabled) }
+        dispatchTimer()
+    }
+
+    /** Persist the local-only choice so a cold start skips the sign-in screen. */
+    fun setAuthSkipped(skipped: Boolean) {
+        prefs.putBool(PREF_AUTH_SKIPPED, skipped)
+        updateSettings { it.copy(authSkipped = skipped) }
     }
 
     fun setAutoSync(enabled: Boolean) {
@@ -519,7 +583,8 @@ object StoreRepository {
         val today = dateKey()
         val due = store.todayHabits
         if (due.isEmpty()) return
-        if (due.all { store.habitDone(it, today) } && celebratedDate != today) {
+        val monday = currentSettings.weekStartMonday
+        if (due.all { store.habitDoneEffective(it, today, monday) } && celebratedDate != today) {
             celebratedDate = today
             emitEvent(GritEvent.AllHabitsDone(done = due.size, total = due.size))
         }
@@ -538,6 +603,7 @@ object StoreRepository {
             target = draft.target.coerceAtLeast(1),
             unit = draft.unit.trim().ifBlank { "times" },
             note = draft.note.trim(),
+            weeklyTimes = draft.weeklyTimes.coerceIn(0, 7),
             createdAt = now,
             updatedAt = now,
             device = dev,
@@ -564,6 +630,7 @@ object StoreRepository {
                     target = draft.target.coerceAtLeast(1),
                     unit = draft.unit.trim().ifBlank { "times" },
                     note = draft.note.trim(),
+                    weeklyTimes = draft.weeklyTimes.coerceIn(0, 7),
                     updatedAt = now,
                     device = dev
                 )
@@ -989,7 +1056,8 @@ object StoreRepository {
                 previousPhase = stopped.phase,
                 next = next,
                 tag = tag,
-                focusCompleted = stopped.phase == "focus"
+                focusCompleted = stopped.phase == "focus",
+                ownerDevice = stopped.device
             )
         }
         if (completion != null) {
@@ -1041,9 +1109,14 @@ object StoreRepository {
         scope.launch {
             runCatching {
                 val text = encodeStore(snapshotForSync())
-                appContext.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                val resolver = appContext.contentResolver
+                val output = resolver.openOutputStream(uri, "wt")
+                    ?: resolver.openOutputStream(uri, "w")
+                    ?: error("Could not open the selected file")
+                output.use { out ->
                     out.write(text.toByteArray(Charsets.UTF_8))
-                } ?: error("Could not open the selected file")
+                    out.flush()
+                }
             }.onSuccess {
                 toast("Backup saved")
             }.onFailure {
@@ -1056,9 +1129,7 @@ object StoreRepository {
     fun importBackup(uri: Uri) {
         scope.launch {
             runCatching {
-                val text = appContext.contentResolver.openInputStream(uri)?.use { input ->
-                    input.readBytes().toString(Charsets.UTF_8)
-                } ?: error("Could not read the selected file")
+                val text = readBackupText(uri)
                 val parsed = normalizeStore(decodeStore(text), deviceId)
                 val now = System.currentTimeMillis()
                 val dev = deviceId
@@ -1099,12 +1170,83 @@ object StoreRepository {
                 saveNow()
                 dispatchTimer()
                 FirestoreSync.syncNow(silent = false)
-            }.onSuccess {
-                toast("Backup restored and uploaded to your devices")
+            }.onSuccess { uploaded ->
+                toast(
+                    if (uploaded) {
+                        "Backup restored and uploaded to your devices"
+                    } else {
+                        "Backup restored on this device"
+                    }
+                )
             }.onFailure {
                 Log.w(TAG, "Backup import failed", it)
-                toast("Could not restore that backup")
+                toast(
+                    if (it is java.io.IOException) {
+                        "Could not read that file — pick it from Downloads"
+                    } else {
+                        "Could not restore that backup"
+                    }
+                )
             }
+        }
+    }
+
+    /**
+     * Reads a backup through whichever door the picker's provider leaves open.
+     * Waydroid's external-storage provider can fail while opening a typed
+     * asset stream over its FUSE mount even though the URI grant is valid, so
+     * try a plain file descriptor and finally the real path before giving up.
+     */
+    private fun readBackupText(uri: Uri): String {
+        val resolver = appContext.contentResolver
+        var lastError: Throwable? = null
+
+        fun tryRead(block: () -> String?): String? = try {
+            block()
+        } catch (error: Throwable) {
+            lastError = error
+            null
+        }
+
+        tryRead {
+            resolver.openInputStream(uri)?.use { input ->
+                input.readBytes().toString(Charsets.UTF_8)
+            }
+        }?.let { return it }
+
+        tryRead {
+            resolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                FileInputStream(descriptor.fileDescriptor).use { input ->
+                    input.readBytes().toString(Charsets.UTF_8)
+                }
+            }
+        }?.let { return it }
+
+        tryRead {
+            directDocumentFile(uri)?.takeIf { it.isFile }?.readText(Charsets.UTF_8)
+        }?.let { return it }
+
+        throw java.io.IOException("Could not read the selected backup", lastError)
+    }
+
+    /** Maps a DocumentsProvider id such as `primary:Download/x.json` to its real file. */
+    private fun directDocumentFile(uri: Uri): File? {
+        if (uri.scheme != "content" ||
+            uri.authority != "com.android.externalstorage.documents"
+        ) {
+            return null
+        }
+        val documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
+            ?: return null
+        val parts = documentId.split(':', limit = 2)
+        if (parts.size != 2 || parts[1].isBlank()) return null
+        return when (parts[0]) {
+            "primary" -> File(Environment.getExternalStorageDirectory(), parts[1])
+            "home" -> File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                parts[1]
+            )
+            else -> File("/storage/${parts[0]}", parts[1])
         }
     }
 

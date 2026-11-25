@@ -73,6 +73,12 @@ class BootReceiver : BroadcastReceiver() {
                 StoreRepository.init(appContext)
                 StoreRepository.awaitLoaded()
                 val timer = StoreRepository.currentStore.timer
+                // A reboot may have left the focus-quiet filter in place; the
+                // sync either re-applies it (a focus phase still runs) or
+                // restores whatever the user had before.
+                com.gritnative.app.timer.FocusDnd.sync(appContext, timer)
+                // The widget keep-alive does not survive a reboot either.
+                com.gritnative.app.widgets.WidgetKeepAlive.schedule(appContext)
                 if (timer?.running == true) {
                     if (computeSecondsLeft(timer) <= 0) {
                         val completion = StoreRepository.completeCurrentPhase()

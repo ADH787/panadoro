@@ -1,13 +1,16 @@
 package com.gritnative.app.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -88,6 +92,7 @@ import com.gritnative.app.ui.components.SessionRow
 import com.gritnative.app.ui.components.ShapeBadge
 import com.gritnative.app.ui.components.StaggeredEntry
 import com.gritnative.app.ui.components.TagChip
+import com.gritnative.app.ui.components.tapHaptic
 import com.gritnative.app.ui.theme.Grit
 import com.gritnative.app.ui.theme.Symbol
 import com.gritnative.app.ui.theme.gritShape
@@ -136,63 +141,9 @@ fun FocusScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 112.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item(key = "tags") {
-            StaggeredEntry(0) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FlowRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    tags.forEach { item: Tag ->
-                        val minutes = store.tagTodayMinutes(item.id)
-                        TagChip(
-                            tag = item,
-                            selected = item.id == tag?.id,
-                            onClick = { StoreRepository.selectTag(item.id) },
-                            enabled = !running,
-                            trailingText = if (minutes > 0) formatMinutesShort(minutes) else ""
-                        )
-                    }
-                }
-                RoundIconButton(
-                    symbol = "add",
-                    onClick = onNewTag,
-                    size = 38.dp,
-                    iconSize = 18.dp,
-                    container = Grit.colors.field
-                )
-                if (tag != null) {
-                    RoundIconButton(
-                        symbol = "tune",
-                        onClick = { onEditTag(tag.id) },
-                        size = 38.dp,
-                        iconSize = 18.dp,
-                        container = colors.container,
-                        content = colors.onContainer
-                    )
-                }
-                if (tags.size > 1 && tag != null) {
-                    RoundIconButton(
-                        symbol = "delete",
-                        onClick = { onDeleteTag(tag.id) },
-                        size = 38.dp,
-                        iconSize = 18.dp,
-                        container = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f),
-                        content = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-            }
-        }
-
         if (tag != null && goalMinutes > 0) {
             item(key = "goal") {
-                StaggeredEntry(1) {
+                StaggeredEntry(0) {
                     GoalBar(
                         todayMinutes = store.tagTodayMinutes(tag.id),
                         goalMinutes = goalMinutes,
@@ -206,12 +157,16 @@ fun FocusScreen(
             StaggeredEntry(1) {
             FocusStage(
                 tag = tag,
+                tags = tags,
                 timer = timer,
                 running = running,
                 onBreak = onBreak,
                 phaseLabel = phaseLabel,
                 phaseIcon = phaseIcon,
                 duration = duration,
+                onNewTag = onNewTag,
+                onEditTag = onEditTag,
+                onDeleteTag = onDeleteTag,
                 progressAt = { clock ->
                     val value = timer
                     if (value == null) {
@@ -353,12 +308,16 @@ fun FocusScreen(
 @Composable
 private fun FocusStage(
     tag: Tag?,
+    tags: List<Tag>,
     timer: TimerState?,
     running: Boolean,
     onBreak: Boolean,
     phaseLabel: String,
     phaseIcon: String,
     duration: Int,
+    onNewTag: () -> Unit,
+    onEditTag: (String) -> Unit,
+    onDeleteTag: (String) -> Unit,
     progressAt: (Long) -> Float,
     paused: Boolean,
     cycles: Int,
@@ -368,6 +327,8 @@ private fun FocusStage(
     val onContainer = colors.onContainer
     val accent = colors.accent
     val shape = RoundedCornerShape(30.dp)
+    val view = LocalView.current
+    var tagsOpen by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -383,6 +344,7 @@ private fun FocusStage(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -410,20 +372,107 @@ private fun FocusStage(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                if (!onBreak) {
+                    // The tag shelf stays folded away until this little arrow
+                    // is tapped, so the stage opens with just the active tag.
+                    RoundIconButton(
+                        symbol = if (tagsOpen) "expand_less" else "expand_more",
+                        onClick = { tagsOpen = !tagsOpen },
+                        size = 28.dp,
+                        iconSize = 16.dp,
+                        container = onContainer.copy(alpha = 0.12f),
+                        content = onContainer
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                // The always-on toggle lives beside the phase, so the controls
+                // row below stays symmetric and play stays dead center.
+                RoundIconButton(
+                    symbol = "bedtime",
+                    onClick = {
+                        tapHaptic(view)
+                        Aod.request(context = view.context)
+                    },
+                    enabled = running,
+                    size = 34.dp,
+                    iconSize = 17.dp,
+                    container = onContainer.copy(alpha = 0.12f),
+                    content = onContainer
+                )
+            }
+
+            AnimatedVisibility(
+                visible = tagsOpen,
+                enter = fadeIn(tween(180)) + expandVertically(tween(220)),
+                exit = fadeOut(tween(120)) + shrinkVertically(tween(160))
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        tags.forEach { item ->
+                            TagChip(
+                                tag = item,
+                                selected = item.id == tag?.id,
+                                onClick = {
+                                    StoreRepository.selectTag(item.id)
+                                    tagsOpen = false
+                                },
+                                enabled = !running
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        RoundIconButton(
+                            symbol = "add",
+                            onClick = onNewTag,
+                            size = 36.dp,
+                            iconSize = 17.dp,
+                            container = onContainer.copy(alpha = 0.12f),
+                            content = onContainer
+                        )
+                        if (tag != null) {
+                            RoundIconButton(
+                                symbol = "tune",
+                                onClick = { onEditTag(tag.id) },
+                                size = 36.dp,
+                                iconSize = 17.dp,
+                                container = onContainer.copy(alpha = 0.12f),
+                                content = onContainer
+                            )
+                        }
+                        if (tags.size > 1 && tag != null) {
+                            RoundIconButton(
+                                symbol = "delete",
+                                onClick = { onDeleteTag(tag.id) },
+                                size = 36.dp,
+                                iconSize = 17.dp,
+                                container = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f),
+                                content = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
             }
 
             // Keep the decorative shape inside the ring's inner circle so its
             // points never poke over the countdown's edge.
             Box(
                 modifier = Modifier
-                    .widthIn(max = 296.dp)
+                    .widthIn(max = 324.dp)
                     .fillMaxWidth()
                     .aspectRatio(1f),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(192.dp)
+                        .size(206.dp)
                         .rotate(18f)
                         .background(
                             accent.copy(alpha = 0.10f),
@@ -433,11 +482,11 @@ private fun FocusStage(
                 LiveWavyRing(
                     progressAt = progressAt,
                     running = running,
-                    modifier = Modifier.size(238.dp),
+                    modifier = Modifier.size(260.dp),
                     color = accent,
                     track = onContainer.copy(alpha = 0.16f),
-                    strokeWidth = 8.dp,
-                    amplitude = 2.2.dp,
+                    strokeWidth = 11.dp,
+                    amplitude = 3.5.dp,
                     wavy = running
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -480,11 +529,14 @@ private fun FocusStage(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 RoundIconButton(
                     symbol = "restart_alt",
-                    onClick = { StoreRepository.resetTimer() },
+                    onClick = {
+                        tapHaptic(view)
+                        StoreRepository.resetTimer()
+                    },
                     size = 50.dp,
                     iconSize = 22.dp,
                     container = onContainer.copy(alpha = 0.12f),
@@ -499,11 +551,14 @@ private fun FocusStage(
                 }
                 Surface(
                     onClick = {
+                        // The press always lands with a tick; starting the
+                        // phase gets the firmer confirmation.
+                        tapHaptic(view, strong = !running)
                         StoreRepository.ensureTimer()
                         StoreRepository.toggleTimer()
                     },
                     modifier = Modifier
-                        .size(74.dp)
+                        .size(78.dp)
                         .scale(buttonPulse.value),
                     shape = CircleShape,
                     color = accent,
@@ -545,7 +600,10 @@ private fun FocusStage(
                 }
                 RoundIconButton(
                     symbol = "skip_next",
-                    onClick = { StoreRepository.skipTimer() },
+                    onClick = {
+                        tapHaptic(view)
+                        StoreRepository.skipTimer()
+                    },
                     size = 50.dp,
                     iconSize = 22.dp,
                     container = onContainer.copy(alpha = 0.12f),
@@ -573,8 +631,8 @@ private fun StageClock(timer: TimerState?, color: Color) {
     Text(
         text = formatClock(computeSecondsLeft(timer, now)),
         color = color,
-        fontSize = 48.sp,
-        lineHeight = 52.sp,
+        fontSize = 54.sp,
+        lineHeight = 58.sp,
         fontWeight = FontWeight.Bold,
         maxLines = 1
     )

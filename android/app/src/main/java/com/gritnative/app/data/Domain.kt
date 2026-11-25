@@ -159,7 +159,8 @@ fun normalizeHabits(items: List<Habit>): List<Habit> = dedupeById(
         icon = it.icon.ifBlank { "check_circle" },
         days = it.days.filter { day -> day in 0..6 }.distinct().ifEmpty { (0..6).toList() },
         target = it.target.coerceAtLeast(1),
-        unit = it.unit.ifBlank { "times" }
+        unit = it.unit.ifBlank { "times" },
+        weeklyTimes = it.weeklyTimes.coerceIn(0, 7)
     )
 }
 
@@ -328,8 +329,100 @@ fun Store.habitProgress(habit: Habit?, date: String = dateKey()): Float {
     return (habitValue(habit.id, date).toFloat() / target).coerceIn(0f, 1f)
 }
 
+// ── Weekly habits (a fixed number of days a week) ───────────────────────
+
+/** The date key of the week [todayKey] belongs to, honouring the week-start setting. */
+fun weekStartOf(todayKey: String, monday: Boolean): String =
+    addDays(todayKey, -weekStartOffset(todayKey, monday))
+
+/** Days of one week (starting at [weekStart]) on which the habit was done. */
+fun Store.weekDoneDays(habit: Habit, weekStart: String, untilKey: String? = null): Int {
+    var count = 0
+    for (offset in 0..6) {
+        val key = addDays(weekStart, offset)
+        if (untilKey != null && key > untilKey) break
+        if (habitDone(habit, key)) count++
+    }
+    return count
+}
+
+/** Progress toward this week's quota, for the row and its strip. */
+fun Store.weekHabitProgress(habit: Habit, todayKey: String = dateKey(), monday: Boolean = false): Float {
+    val quota = habit.weeklyTimes.coerceAtLeast(1)
+    return (weekDoneDays(habit, weekStartOf(todayKey, monday)).toFloat() / quota).coerceIn(0f, 1f)
+}
+
+/**
+ * Done "for today" — a weekly habit counts as done once the week's quota is
+ * met, even if today itself has no entry yet.
+ */
+fun Store.habitDoneEffective(
+    habit: Habit?,
+    todayKey: String = dateKey(),
+    monday: Boolean = false
+): Boolean {
+    if (habit == null) return false
+    if (habit.weeklyTimes <= 0) return habitDone(habit, todayKey)
+    if (habitDone(habit, todayKey)) return true
+    return weekDoneDays(habit, weekStartOf(todayKey, monday)) >= habit.weeklyTimes
+}
+
+/**
+ * The weekly streak counts days, like the daily one, but it never resets
+ * mid-week: every day done this week keeps the thread alive, and only the end
+ * of a week that missed its quota cuts it back to zero.
+ */
+fun Store.weeklyHabitStreak(habit: Habit, todayKey: String = dateKey(), monday: Boolean = false): Int {
+    val quota = habit.weeklyTimes.coerceIn(1, 7)
+    val currentStart = weekStartOf(todayKey, monday)
+    var streak = weekDoneDays(habit, currentStart, todayKey)
+    var cursor = addDays(currentStart, -7)
+    var guard = 0
+    while (guard++ < 400) {
+        val days = weekDoneDays(habit, cursor)
+        if (days >= quota) {
+            streak += days
+            cursor = addDays(cursor, -7)
+        } else {
+            break
+        }
+    }
+    return streak
+}
+
+/** The highest the weekly thread ever grew before a missed week reset it. */
+fun Store.weeklyHabitBestStreak(habit: Habit, todayKey: String = dateKey(), monday: Boolean = false): Int {
+    val quota = habit.weeklyTimes.coerceIn(1, 7)
+    val currentStart = weekStartOf(todayKey, monday)
+    val createdKey = habit.createdAt.takeIf { it > 0 }?.let { dateKey(it) }
+    val firstEntryKey = activeEntries
+        .filter { it.habitId == habit.id }
+        .minOfOrNull { it.date }
+    val seed = listOfNotNull(createdKey, firstEntryKey).minOrNull() ?: currentStart
+    var cursor = weekStartOf(seed, monday)
+    var running = 0
+    var best = 0
+    var guard = 0
+    while (cursor <= currentStart && guard++ < 1_000) {
+        val days = if (cursor == currentStart) {
+            weekDoneDays(habit, cursor, todayKey)
+        } else {
+            weekDoneDays(habit, cursor)
+        }
+        running += days
+        best = maxOf(best, running)
+        // A finished week that missed its quota resets the thread — but only
+        // after its days were already seen, so the peak survives.
+        if (cursor != currentStart && days < quota) running = 0
+        cursor = addDays(cursor, 7)
+    }
+    return maxOf(best, weeklyHabitStreak(habit, todayKey, monday))
+}
+
 fun Store.scheduledOn(habit: Habit?, date: String = dateKey()): Boolean {
     if (habit == null) return false
+    // A weekly-quota habit is doable on any day, so every day is "scheduled".
+    if (habit.weeklyTimes > 0) return true
     val days = habit.days.ifEmpty { (0..6).toList() }
     return weekdayOf(date) in days
 }
@@ -407,7 +500,7 @@ val Store.todayHabits: List<Habit>
         .filter { scheduledOn(it, dateKey()) }
         .sortedWith(compareBy { it.time.ifBlank { "99:99" } })
 
-val Store.todayHabitsDone: Int get() = todayHabits.count { habitDone(it) }
+val Store.todayHabitsDone: Int get() = todayHabits.count { habitDoneEffective(it) }
 
 fun Store.taskFiltered(filter: String, todayKey: String = dateKey()): List<Task> {
     var list = activeTasks
@@ -627,10 +720,21 @@ fun splitSessionByDay(session: FocusSession): List<SessionPart> {
     return out
 }
 
+/**
+ * A row that counts as a session in the stats: either the phase ran to the end,
+ * or it covered at least half of what it promised. A skipped or abandoned
+ * fragment should not inflate the "Sessions" tile.
+ */
+fun countsAsSession(session: FocusSession): Boolean =
+    session.completed ||
+        session.durationSec >= ((session.plannedSec.coerceAtLeast(1) + 1) / 2)
+
 fun Store.sessionsInRange(days: Int, phase: String? = null, todayKey: String = dateKey()): List<FocusSession> {
     val startMs = startOfDayMillis(addDays(todayKey, -(days.coerceAtLeast(1) - 1)))
     return activeSessions.filter { session ->
-        (phase == null || session.phase == phase) && session.endedAt >= startMs
+        (phase == null || session.phase == phase) &&
+            session.endedAt >= startMs &&
+            countsAsSession(session)
     }
 }
 
@@ -931,6 +1035,43 @@ fun Store.bestFocusDay(days: Int, todayKey: String = dateKey()): BestDay {
     return best
 }
 
+/**
+ * Everything recorded so far, as a day count: the span from the earliest
+ * session, entry, habit or task to today. The stats page uses this for the
+ * "All time" range so a huge placeholder number is never needed.
+ */
+fun Store.allTimeDays(todayKey: String = dateKey()): Int {
+    var earliest: String? = null
+    for (session in activeSessions) {
+        if (session.endedAt > 0L) {
+            val key = dateKey(session.endedAt)
+            if (earliest == null || key < earliest) earliest = key
+        }
+    }
+    for (entry in activeEntries) {
+        if (entry.date.isNotBlank() && (earliest == null || entry.date < earliest)) {
+            earliest = entry.date
+        }
+    }
+    for (habit in activeHabits) {
+        if (habit.createdAt > 0L) {
+            val key = dateKey(habit.createdAt)
+            if (earliest == null || key < earliest) earliest = key
+        }
+    }
+    for (task in activeTasks) {
+        if (task.createdAt > 0L) {
+            val key = dateKey(task.createdAt)
+            if (earliest == null || key < earliest) earliest = key
+        }
+    }
+    val start = earliest ?: return 1
+    val span = java.time.temporal.ChronoUnit.DAYS.between(
+        dateFromKey(start), dateFromKey(todayKey)
+    ) + 1
+    return span.coerceIn(1, 3660).toInt()
+}
+
 fun Store.breakRatio(days: Int, todayKey: String = dateKey()): Pair<Long, Long> {
     val focus = secondsInRange(days, "focus", todayKey)
     val breaks = secondsInRange(days, "shortBreak", todayKey) +
@@ -963,25 +1104,46 @@ data class HabitStat(
 )
 
 /** Mirrors GritService.habitStats: scheduled days in range, completion and streaks. */
-fun Store.habitStats(days: Int, todayKey: String = dateKey()): List<HabitStat> {
+fun Store.habitStats(days: Int, todayKey: String = dateKey(), monday: Boolean = false): List<HabitStat> {
     val keys = lastNDays(days.coerceAtLeast(1), todayKey)
     return activeHabits.map { habit ->
-        var due = 0
-        var done = 0
-        for (key in keys) {
-            if (!scheduledOn(habit, key)) continue
-            due++
-            if (habitDone(habit, key)) done++
+        if (habit.weeklyTimes > 0) {
+            // A weekly habit is judged by weeks: its quota is due once a week,
+            // and any day done in the range pulls the rate up.
+            val quota = habit.weeklyTimes.coerceIn(1, 7)
+            val weeks = keys.map { weekStartOf(it, monday) }.distinct().size
+            var done = 0
+            for (key in keys) {
+                if (habitDone(habit, key)) done++
+            }
+            val due = weeks * quota
+            HabitStat(
+                habit = habit,
+                name = habit.name,
+                due = due,
+                done = done,
+                rate = if (due > 0) (done.toFloat() / due).coerceAtMost(1f) else 0f,
+                streak = weeklyHabitStreak(habit, todayKey, monday),
+                best = weeklyHabitBestStreak(habit, todayKey, monday)
+            )
+        } else {
+            var due = 0
+            var done = 0
+            for (key in keys) {
+                if (!scheduledOn(habit, key)) continue
+                due++
+                if (habitDone(habit, key)) done++
+            }
+            HabitStat(
+                habit = habit,
+                name = habit.name,
+                due = due,
+                done = done,
+                rate = if (due > 0) done.toFloat() / due else 0f,
+                streak = currentStreak(habit, todayKey),
+                best = bestStreak(habit, todayKey)
+            )
         }
-        HabitStat(
-            habit = habit,
-            name = habit.name,
-            due = due,
-            done = done,
-            rate = if (due > 0) done.toFloat() / due else 0f,
-            streak = currentStreak(habit, todayKey),
-            best = bestStreak(habit, todayKey)
-        )
     }.sortedByDescending { it.rate }
 }
 

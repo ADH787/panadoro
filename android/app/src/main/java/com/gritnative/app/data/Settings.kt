@@ -13,17 +13,31 @@ import javax.crypto.spec.GCMParameterSpec
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** Bottom-navigation tabs in their display order. */
+val APP_TAB_IDS = listOf("today", "tasks", "focus", "stats", "ranks")
+
 data class AppSettings(
     val deviceId: String = "",
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val language: String = "system",
+    /** Titan One is the default; "system" follows the phone's own face. */
+    val appFont: String = "titan",
     val colorProfile: String = "dynamic",
     val dynamicColor: Boolean = true,
     val amoled: Boolean = false,
-    val weekStartMonday: Boolean = true,
+    /** Sunday is the quiet default; the week and the leaderboard follow it. */
+    val weekStartMonday: Boolean = false,
     val showCompleted: Boolean = true,
+    /** Tabs the user hid from the bottom navigation bar. */
+    val hiddenTabs: Set<String> = emptySet(),
     val autoSync: Boolean = true,
     val alarmSound: Boolean = true,
+    /** Keep a dim countdown on screen while a focus phase runs. */
+    val alwaysOnDisplay: Boolean = false,
+    /** Silence the phone while a focus phase runs; the alarm still rings. */
+    val focusDnd: Boolean = false,
+    /** The user chose "Continue without an account" on this install. */
+    val authSkipped: Boolean = false,
     val lastSyncAt: String = "",
     val displayName: String = "",
     val displayNameUpdatedAt: Long = 0L,

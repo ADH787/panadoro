@@ -43,7 +43,8 @@ class TasksWidget : BaseGritWidget() {
 }
 
 class TasksWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = TasksWidget()
+    // Shared with the updater so refreshes reach the pinned ids.
+    override val glanceAppWidget: GlanceAppWidget = GritWidgetHost.tasks
 }
 
 @Composable
@@ -54,12 +55,14 @@ internal fun TasksWidgetContent(store: Store, colors: WidgetColors) {
     val due = store.taskFiltered("today", today)
     val shown = if (due.isNotEmpty()) due else store.taskFiltered("open", today)
     val dense = size.height < 150.dp
+    // Header, the optional "+N more" line and the footer row share Glance's
+    // ten-child Column limit with the task rows.
     val maxRows = when {
         size.height < 215.dp -> 2
         size.height < 280.dp -> 3
         size.height < 350.dp -> 4
-        else -> 6
-    }.coerceAtMost(if (size.width < 210.dp) 4 else 9)
+        else -> 5
+    }.coerceAtMost(if (size.height >= 170.dp) 5 else 7)
     val date = LocalDate.now().format(
         DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault())
     )

@@ -2,6 +2,8 @@ package com.gritnative.app.widgets
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
@@ -29,10 +31,15 @@ abstract class BaseGritWidget : GlanceAppWidget() {
     final override suspend fun provideGlance(context: Context, id: GlanceId) {
         StoreRepository.init(context)
         StoreRepository.awaitLoaded()
-        val store = StoreRepository.currentStore
-        val settings = StoreRepository.currentSettings
-        val colors = widgetColors(context, settings)
+        // Collect inside the session, not before it. Glance keeps a running
+        // session across data changes; a snapshot captured in provideGlance
+        // would make every update recompose the state from when the session
+        // first opened, leaving pinned widgets stuck on old timer/check-in
+        // values.
         provideContent {
+            val store by StoreRepository.store.collectAsState()
+            val settings by StoreRepository.settings.collectAsState()
+            val colors = widgetColors(context, settings)
             WidgetContent(store, settings, colors)
         }
     }

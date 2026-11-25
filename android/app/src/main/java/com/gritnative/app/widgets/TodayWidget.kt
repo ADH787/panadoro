@@ -41,7 +41,8 @@ class TodayWidget : BaseGritWidget() {
 }
 
 class TodayWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = TodayWidget()
+    // Shared with the updater so refreshes reach the pinned ids.
+    override val glanceAppWidget: GlanceAppWidget = GritWidgetHost.today
 }
 
 @Composable
@@ -54,12 +55,15 @@ internal fun TodayWidgetContent(store: Store, colors: WidgetColors) {
     val progress = if (habits.isEmpty()) 0f else done.toFloat() / habits.size
     val dense = size.height < 150.dp
     val compact = size.width < 210.dp || dense
+    // Glance caps a Column at ten children. Header, progress and the footer
+    // already claim slots, and "+N more" needs one too, so keep the list short
+    // enough that a large tile cannot crash its own composition.
     val maxRows = when {
         size.height < 215.dp -> 2
         size.height < 280.dp -> 3
         size.height < 350.dp -> 4
-        else -> 6
-    }.coerceAtMost(if (compact) 4 else 9)
+        else -> 5
+    }.coerceAtMost(if (size.height >= 170.dp) 3 else 5)
     val date = LocalDate.now().format(
         DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault())
     )

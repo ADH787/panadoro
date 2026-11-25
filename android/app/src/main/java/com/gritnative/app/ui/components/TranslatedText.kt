@@ -120,9 +120,12 @@ private val NUMBER_PATTERNS: List<Pair<Regex, (MatchResult) -> String>> = listOf
     Regex("""^(Morning|Afternoon|Evening|Night)  (.+)$""") to {
         "${translateText(it.groupValues[1])}  ${it.groupValues[2]}"
     },
-    Regex("""^(.+) day streak$""") to { "سلسلة ${it.groupValues[1]} يوم" },
+    Regex("""^(\d+) day streak$""") to {
+        val days = it.groupValues[1]
+        if (days == "1") "حماسة يوم واحد" else "حماسة $days أيام"
+    },
+    Regex("""^(.+) day streak$""") to { "حماسة ${it.groupValues[1]}" },
     Regex("""^(\d+) sessions$""") to { "${it.groupValues[1]} جلسات" },
-    Regex("""^(\d+) day streak$""") to { "${it.groupValues[1]} يوم متتالي" },
     Regex("""^(\d+) of (\d+) (times|glasses|blocks|pages|minutes)$""") to {
         val unit = when (it.groupValues[3]) {
             "times" -> "مرات"

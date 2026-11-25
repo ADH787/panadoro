@@ -36,7 +36,10 @@ class FocusWidget : BaseGritWidget() {
 }
 
 class FocusWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = FocusWidget()
+    // The shared instance matters: updates resolve widget ids through the
+    // instance the receiver hosted, so a fresh one here would leave pinned
+    // widgets stale.
+    override val glanceAppWidget: GlanceAppWidget = GritWidgetHost.focus
 }
 
 @Composable
@@ -138,13 +141,15 @@ internal fun FocusWidgetContent(store: Store, colors: WidgetColors) {
             }
         }
         if (!compact) {
-            Spacer(GlanceModifier.height(4.dp))
+            // Padding instead of another Spacer keeps the root Column inside
+            // Glance's ten-child limit.
             WidgetText(
                 text = tag?.let {
                     "Planned ${it.focusMinutes}m · ${it.breakMinutes}m break · ${it.cycles} cycles"
                 } ?: "Focus sessions stay in your stats.",
                 color = colors.subtext,
                 size = 8.5.sp,
+                modifier = GlanceModifier.padding(top = 4.dp),
                 maxLines = 1
             )
         }

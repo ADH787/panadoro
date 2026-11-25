@@ -1,8 +1,53 @@
-# Panadoro 1.9.5
+# Panadoro 2.0.0
 
 Native Kotlin/Jetpack Compose build of the merged Panadoro habit tracker and
 Tomato focus timer. The UI data model and Firebase wire format are compatible
 with the quickshell app, so both clients stay in sync.
+
+## What's new in 2.0.0
+
+- The interface is quieter: page titles are centred, larger and heavier, page
+  subtitles and settings descriptions are gone, and the Tasks summary cards
+  and Habits stats banner have been removed.
+- Habits and Tasks share a new hero card with only the main sentence and a
+  progress ring. Its watermark shape drifts, spins and bounces inside the card.
+- Tasks are one straight list — no filter rows. Finished tasks and habits stay
+  in place and glide to the end instead of disappearing.
+- The Stats rhythm chart always fills its card, Daily hides the charts, and
+  zero progress bars no longer leave a dot at the start.
+- Focus tags live behind a small expand arrow beside the active tag.
+- Settings can hide any tab, including Habits. The last visible tab refuses to
+  switch off, so the navigation bar never disappears completely.
+- Settings rows use larger icons, and the Panadoro colour profile uses the
+  exact orange, tomato red and stem green sampled from the app artwork.
+- Titan One is the default app-wide display font; Appearance → App font can
+  switch the whole app to the phone's system face.
+- The supplied tomato-reading artwork is the launcher icon, fitted unchanged
+  inside the adaptive-icon safe area, and the application id is
+  `com.panadoro.app`.
+- Build version is 2.0.0 (versionCode 25).
+
+## What's new in 1.9.7
+
+- Backup import opens in Downloads and reads through a fallback chain, so a
+  provider that breaks its typed-asset stream no longer blocks a restore.
+  Backup export retries a plain write mode when a provider rejects truncation.
+- Stats now shares one range for every card: Daily, 7 days, 30 days and
+  All time. The rhythm chart pans horizontally and pinches to zoom.
+- "Do Not Disturb while focusing" now declares Android's
+  `ACCESS_NOTIFICATION_POLICY`, so Panadoro appears in the system's DND access
+  list. The toggle turns itself back off if the grant is missing, and its
+  Material glyph is optically centred in the badge.
+- Home-screen widgets respect Glance's ten-child Column limit, compose against
+  the live store instead of a snapshot captured when the session opened, and
+  coalesce updates instead of cancelling in-flight ones. Action taps update the
+  pinned tile immediately, including when the timer stops and the service goes
+  away.
+- "Continue without an account" sits above the navigation bar on a 9:16
+  screen, and the choice is persisted so cold starts go straight to the app.
+  Signing in clears it; a deliberate sign-out brings the login screen back.
+- The Stats range selector is text-only: Daily, 7 days, 30 days and All time.
+- Build version is 1.9.7 (versionCode 24).
 
 ## What's new in 1.9.5
 

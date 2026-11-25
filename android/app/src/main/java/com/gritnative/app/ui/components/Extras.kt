@@ -55,6 +55,8 @@ import kotlin.math.sin
  * A Grit progress ring. It can undulate while a timer runs, matching the wavy
  * ring in the quickshell app, and otherwise stays a calm round track.
  */
+private const val WAVES = 14.0
+
 @Composable
 fun WavyRing(
     progress: Float,
@@ -128,6 +130,13 @@ private fun WavyRingCanvas(
     wavy: Boolean,
     content: @Composable BoxScope.() -> Unit
 ) {
+    // The wave never pops between shapes: pausing flattens it and resuming
+    // raises it again over one calm motion, exactly like the desktop ring.
+    val waveAmount by animateFloatAsState(
+        targetValue = if (wavy) 1f else 0f,
+        animationSpec = tween(520, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "wavy-ring-amount"
+    )
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = strokeWidth.toPx()
@@ -142,16 +151,20 @@ private fun WavyRingCanvas(
             val fraction = progress().coerceIn(0f, 1f)
             if (fraction <= 0.0005f) return@Canvas
             val sweep = 360f * fraction
-            val steps = (sweep / 2f).roundToInt().coerceAtLeast(2)
-            val wave = amplitude.toPx()
+            val steps = (sweep * 1.5f).roundToInt().coerceAtLeast(3)
+            val wave = amplitude.toPx() * waveAmount
             val path = Path()
             for (index in 0..steps) {
-                val degrees = -90f + sweep * index / steps
-                val radians = Math.toRadians(degrees.toDouble())
-                val ripple = if (wavy) sin(radians * 18.0).toFloat() * wave else 0f
+                // The wave hangs on the arc's own degrees, anchored at the
+                // twelve-o'clock start, so the pattern stays exactly where it
+                // was drawn while the countdown drains — no crawling, no
+                // sliding around the dial.
+                val arcDegrees = sweep * index / steps
+                val theta = Math.toRadians((-90.0 + arcDegrees))
+                val ripple = (sin(arcDegrees * Math.PI / 180.0 * WAVES) * wave).toFloat()
                 val r = radius + ripple
-                val x = center.x + (r * cos(radians)).toFloat()
-                val y = center.y + (r * sin(radians)).toFloat()
+                val x = center.x + (r * cos(theta)).toFloat()
+                val y = center.y + (r * sin(theta)).toFloat()
                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
             drawPath(

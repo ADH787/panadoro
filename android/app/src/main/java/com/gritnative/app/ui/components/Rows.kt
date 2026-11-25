@@ -365,12 +365,14 @@ fun GoalBar(
                 .background(Grit.colors.field, CircleShape)
                 .padding(0.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress.coerceIn(0.03f, 1f))
-                    .background(accent, CircleShape)
-                    .padding(vertical = 3.dp)
-            )
+            if (progress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress.coerceIn(0.03f, 1f))
+                        .background(accent, CircleShape)
+                        .padding(vertical = 3.dp)
+                )
+            }
         }
         Text(
             text = "${formatMinutesShort(todayMinutes)} / ${formatMinutesShort(goalMinutes)}",
@@ -453,14 +455,6 @@ fun CardHeader(title: String, subtitle: String = "", modifier: Modifier = Modifi
                 lineHeight = 18.sp,
                 fontWeight = FontWeight.SemiBold
             )
-            if (subtitle.isNotBlank()) {
-                Text(
-                    text = subtitle,
-                    color = Grit.colors.subtext,
-                    fontSize = 10.5.sp,
-                    lineHeight = 13.sp
-                )
-            }
         }
         trailing?.invoke()
     }

@@ -30,6 +30,7 @@ import com.gritnative.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ import com.gritnative.app.data.bestFocusDay
 import com.gritnative.app.data.breakRatio
 import com.gritnative.app.data.dailyFocusSeries
 import com.gritnative.app.data.dailyTagFocusSeries
+import com.gritnative.app.data.dateKey
 import com.gritnative.app.data.focusHeatmapWeeks
 import com.gritnative.app.data.focusMinutesInRange
 import com.gritnative.app.data.focusStreak
@@ -64,6 +66,7 @@ import com.gritnative.app.data.tagStats
 import com.gritnative.app.data.tagStreak
 import com.gritnative.app.data.tagTodayMinutes
 import com.gritnative.app.data.timeOfDayStats
+import com.gritnative.app.data.allTimeDays
 import com.gritnative.app.ui.components.CardHeader
 import com.gritnative.app.ui.components.DonutSlice
 import com.gritnative.app.ui.components.Flame
@@ -71,19 +74,21 @@ import com.gritnative.app.ui.components.FocusDonut
 import com.gritnative.app.ui.components.FocusHeatmap
 import com.gritnative.app.ui.components.FormChip
 import com.gritnative.app.ui.components.GritPanel
-import com.gritnative.app.ui.components.HeroCard
 import com.gritnative.app.ui.components.MiniStatTile
 import com.gritnative.app.ui.components.ProgressLine
 import com.gritnative.app.ui.components.SegmentOption
 import com.gritnative.app.ui.components.SegmentedSelector
 import com.gritnative.app.ui.components.ShapeBadge
 import com.gritnative.app.ui.components.StaggeredEntry
-import com.gritnative.app.ui.components.TagBarChart
+import com.gritnative.app.ui.components.ZoomableRhythmChart
 import com.gritnative.app.ui.theme.Grit
 import com.gritnative.app.ui.theme.Symbol
 import com.gritnative.app.ui.theme.lerpColor
 import com.gritnative.app.ui.theme.tagColors
 import kotlin.math.roundToInt
+
+/** The "All time" choice in the stats range selector. */
+private const val RANGE_ALL_TIME = -1
 
 /**
  * Stats mirrors the desktop report: a rhythm chart, the split between tags, the
@@ -96,10 +101,21 @@ fun StatsScreen(
     store: Store,
     weekStartMonday: Boolean
 ) {
-    var rangeDays by rememberSaveable { mutableStateOf(7) }
+    // The selector works on ids: 1 day, 7, 30 or -1 for everything recorded.
+    var rangeId by rememberSaveable { mutableStateOf(7) }
     var chartMode by rememberSaveable { mutableStateOf("tags") }
     var rhythmTagId by rememberSaveable { mutableStateOf("") }
 
+    val allTimeDays = remember(store) { store.allTimeDays() }
+    val rangeDays = when (rangeId) {
+        RANGE_ALL_TIME -> allTimeDays
+        else -> rangeId
+    }
+    val rangeLabel = when (rangeId) {
+        1 -> "today"
+        RANGE_ALL_TIME -> "all time"
+        else -> "$rangeId days"
+    }
     val activeTags = store.activeTags
     val focusMinutes = store.focusMinutesInRange(rangeDays)
     val sessionCount = store.sessionsInRange(rangeDays, "focus").size
@@ -109,7 +125,7 @@ fun StatsScreen(
     val breakMinutes = (breakSeconds / 60.0).roundToInt()
     val dayStreak = store.focusStreak()
     val tags: List<TagStat> = store.tagStats(rangeDays)
-    val habits: List<HabitStat> = store.habitStats(rangeDays)
+    val habits: List<HabitStat> = store.habitStats(rangeDays, dateKey(), weekStartMonday)
     val dayParts = store.timeOfDayStats(rangeDays)
     val focusSeries = store.dailyFocusSeries(rangeDays)
     val tagSeries = store.dailyTagFocusSeries(rangeDays)
@@ -125,12 +141,9 @@ fun StatsScreen(
             }
         )
     }
-    val tagChartDays = minOf(rangeDays, 30)
-    val tagChartLabelEvery = when {
-        tagChartDays <= 7 -> 1
-        tagChartDays <= 14 -> 2
-        else -> 5
-    }
+    // The rhythm chart carries as much of the range as makes sense to pan
+    // through; its pinch zoom decides how much of it is on screen at once.
+    val tagChartDays = rangeDays.coerceIn(1, 730)
     val focusSlices = tags
         .filter { it.seconds > 0 }
         .map { stat ->
@@ -147,31 +160,18 @@ fun StatsScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 112.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item(key = "hero") {
-            StaggeredEntry(0) {
-                HeroCard(
-                    symbol = "monitoring",
-                    title = if (focusMinutes > 0) "You gave the time a shape."
-                    else "The first session is a blank page.",
-                    text = "$focusMinutes focused across $rangeDays ${if (rangeDays == 1) "day" else "days"}",
-                    container = MaterialTheme.colorScheme.secondaryContainer,
-                    onContainer = MaterialTheme.colorScheme.onSecondaryContainer,
-                    accent = MaterialTheme.colorScheme.primary,
-                    shapeName = "Cookie12Sided"
-                )
-            }
-        }
-
         item(key = "range") {
-            StaggeredEntry(1) {
+            StaggeredEntry(0) {
                 SegmentedSelector(
                     options = listOf(
-                        SegmentOption(7, "7 days", "date_range"),
-                        SegmentOption(30, "30 days", "event"),
-                        SegmentOption(90, "90 days", "history")
+                        SegmentOption(1, "Daily"),
+                        SegmentOption(7, "7 days"),
+                        SegmentOption(30, "30 days"),
+                        SegmentOption(RANGE_ALL_TIME, "All time")
                     ),
-                    selected = rangeDays,
-                    onSelect = { rangeDays = it }
+                    selected = rangeId,
+                    onSelect = { rangeId = it },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -265,7 +265,7 @@ fun StatsScreen(
                     title = "Focus rhythm",
                     subtitle = when {
                         chartMode == "breaks" -> "Breaks between focus sessions"
-                        rhythmTag != null -> "${rhythmTag.name} · one rhythm, ${tagChartDays} days"
+                        rhythmTag != null -> "${rhythmTag.name} · pinch to zoom, drag to pan"
                         else -> "Create a focus tag to give each rhythm its own chart"
                     }
                 )
@@ -346,9 +346,9 @@ fun StatsScreen(
                                 )
                                 Text(
                                     text = if (breaks) {
-                                        "break time in $tagChartDays days"
+                                        "break time · $rangeLabel"
                                     } else {
-                                        "focused in $tagChartDays days · " +
+                                        "focused · $rangeLabel · " +
                                             if (shownPeak != null && shownPeak.total > 0) {
                                                 "best ${shownPeak.label}"
                                             } else {
@@ -388,14 +388,17 @@ fun StatsScreen(
                                 minFraction = 0.02f
                             )
                         }
-                        TagBarChart(
-                            series = shownSeries,
-                            chartHeight = 158.dp,
-                            labelEvery = tagChartLabelEvery,
-                            fallbackColor = if (breaks) MaterialTheme.colorScheme.tertiary
-                            else shownColors.accent,
-                            goalSeconds = if (breaks || shownGoal <= 0) 0L else shownGoal * 60L
-                        )
+                        // A single day does not need a seven-bar rhythm chart.
+                        if (rangeId != 1) {
+                            ZoomableRhythmChart(
+                                series = shownSeries,
+                                chartHeight = 158.dp,
+                                fallbackColor = if (breaks) MaterialTheme.colorScheme.tertiary
+                                else shownColors.accent,
+                                goalSeconds = if (breaks || shownGoal <= 0) 0L else shownGoal * 60L,
+                                visibleDays = 14
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(9.dp))
@@ -527,48 +530,50 @@ fun StatsScreen(
             }
         }
 
-        item(key = "heat") {
-            GritPanel {
-                CardHeader(
-                    title = "Twelve weeks of consistency",
-                    subtitle = "Each column is a week · darker means more focus"
-                )
-                Spacer(Modifier.height(12.dp))
-                FocusHeatmap(
-                    values = store.focusHeatmapWeeks(12, monday = weekStartMonday),
-                    modifier = Modifier.fillMaxWidth(),
-                    accent = MaterialTheme.colorScheme.primary,
-                    cellSize = null,
-                    cellGap = 3.dp,
-                    showLabels = true,
-                    mondayStart = weekStartMonday
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Quieter", color = Grit.colors.subtext, fontSize = 9.sp)
-                    Spacer(Modifier.width(5.dp))
-                    repeat(5) { index ->
-                        Box(
-                            Modifier
-                                .padding(horizontal = 1.5.dp)
-                                .size(9.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(
-                                    if (index == 0) Grit.colors.field
-                                    else lerpColor(
-                                        Grit.colors.field,
-                                        MaterialTheme.colorScheme.primary,
-                                        0.2f + index * 0.16f
+        if (rangeId != 1) {
+            item(key = "heat") {
+                GritPanel {
+                    CardHeader(
+                        title = "Twelve weeks of consistency",
+                        subtitle = "Each column is a week · darker means more focus"
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    FocusHeatmap(
+                        values = store.focusHeatmapWeeks(12, monday = weekStartMonday),
+                        modifier = Modifier.fillMaxWidth(),
+                        accent = MaterialTheme.colorScheme.primary,
+                        cellSize = null,
+                        cellGap = 3.dp,
+                        showLabels = true,
+                        mondayStart = weekStartMonday
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Quieter", color = Grit.colors.subtext, fontSize = 9.sp)
+                        Spacer(Modifier.width(5.dp))
+                        repeat(5) { index ->
+                            Box(
+                                Modifier
+                                    .padding(horizontal = 1.5.dp)
+                                    .size(9.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(
+                                        if (index == 0) Grit.colors.field
+                                        else lerpColor(
+                                            Grit.colors.field,
+                                            MaterialTheme.colorScheme.primary,
+                                            0.2f + index * 0.16f
+                                        )
                                     )
-                                )
-                        )
+                            )
+                        }
+                        Spacer(Modifier.width(5.dp))
+                        Text("More focus", color = Grit.colors.subtext, fontSize = 9.sp)
                     }
-                    Spacer(Modifier.width(5.dp))
-                    Text("More focus", color = Grit.colors.subtext, fontSize = 9.sp)
                 }
             }
         }
@@ -641,20 +646,13 @@ fun StatsScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Consistency by tag",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "A focus graph and twelve weeks of consistency for each tag",
-                        color = Grit.colors.subtext,
-                        fontSize = 10.5.sp,
-                        lineHeight = 14.sp
-                    )
-                }
+                Text(
+                    text = "Consistency by tag",
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -718,38 +716,42 @@ fun StatsScreen(
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = "Rhythm · $tagChartDays days",
-                        color = Grit.colors.subtext,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    TagBarChart(
-                        series = store.tagFocusSeries(tag.id, tagChartDays),
-                        chartHeight = 94.dp,
-                        labelEvery = tagChartLabelEvery,
-                        fallbackColor = colors.accent,
-                        goalSeconds = if (goalMinutes > 0) goalMinutes * 60L else 0L
-                    )
+                if (rangeId != 1) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            text = "Rhythm",
+                            color = Grit.colors.subtext,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        ZoomableRhythmChart(
+                            series = store.tagFocusSeries(tag.id, tagChartDays),
+                            chartHeight = 94.dp,
+                            fallbackColor = colors.accent,
+                            goalSeconds = if (goalMinutes > 0) goalMinutes * 60L else 0L,
+                            visibleDays = 14
+                        )
+                    }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Last 12 weeks",
-                        color = Grit.colors.subtext,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    FocusHeatmap(
-                        values = store.focusHeatmapWeeks(12, tagId = tag.id, monday = weekStartMonday),
-                        modifier = Modifier.fillMaxWidth(),
-                        accent = colors.accent,
-                        cellSize = null,
-                        cellGap = 2.dp,
-                        showLabels = true,
-                        mondayStart = weekStartMonday
-                    )
+                if (rangeId != 1) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Last 12 weeks",
+                            color = Grit.colors.subtext,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        FocusHeatmap(
+                            values = store.focusHeatmapWeeks(12, tagId = tag.id, monday = weekStartMonday),
+                            modifier = Modifier.fillMaxWidth(),
+                            accent = colors.accent,
+                            cellSize = null,
+                            cellGap = 2.dp,
+                            showLabels = true,
+                            mondayStart = weekStartMonday
+                        )
+                    }
                 }
 
                 Row(

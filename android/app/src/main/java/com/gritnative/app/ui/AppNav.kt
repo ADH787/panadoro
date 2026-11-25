@@ -53,6 +53,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -85,11 +86,12 @@ import com.gritnative.app.data.TimerState
 import com.gritnative.app.data.activeTag
 import com.gritnative.app.data.computeSecondsLeft
 import com.gritnative.app.data.dateKey
-import com.gritnative.app.data.dueTodayTaskCount
 import com.gritnative.app.data.formatClock
 import com.gritnative.app.data.openTaskCount
 import com.gritnative.app.data.todayHabits
 import com.gritnative.app.data.todayHabitsDone
+import com.gritnative.app.AppForeground
+import com.gritnative.app.timer.CompletionAlarm
 import com.gritnative.app.ui.components.AmbientBackdrop
 import com.gritnative.app.ui.components.CategoryEditorSheet
 import com.gritnative.app.ui.components.DeleteTagSheet
@@ -105,11 +107,13 @@ import com.gritnative.app.ui.components.TaskEditorSheet
 import com.gritnative.app.ui.components.translateText
 import com.gritnative.app.ui.theme.Grit
 import com.gritnative.app.ui.theme.Symbol
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import kotlin.math.abs
+import kotlinx.coroutines.delay
 
 private data class GritTab(val id: String, val label: String, val symbol: String)
+
+/** How long the screen may stay untouched before the AOD fades in by itself. */
+private const val AOD_AFTER_MS = 45_000L
 
 private sealed interface AppSheet {
     data class Habit(val id: String) : AppSheet
@@ -127,14 +131,7 @@ private data class Celebration(
     val symbol: String
 )
 
-/**
- * The sign-in screen is shown on every cold start while signed out, but a user
- * who chooses to continue without an account should not be asked again until the
- * process restarts (or until they tap "Sign in" somewhere).
- */
-private val authSkippedThisProcess = mutableStateOf(false)
-
-private val tabs = listOf(
+private val allTabs = listOf(
     GritTab("today", "Habits", "wb_sunny"),
     GritTab("tasks", "Tasks", "checklist"),
     GritTab("focus", "Focus", "psychiatry"),
@@ -157,6 +154,10 @@ fun AppNav(
     val ready by StoreRepository.ready.collectAsState()
     val syncState by StoreRepository.syncState.collectAsState()
     val auth by AuthService.state.collectAsState()
+    val alarmActive by CompletionAlarm.active.collectAsState()
+    // Every tab can be hidden, but the settings layer refuses to turn off the
+    // last one, so this list is never empty.
+    val tabs = allTabs.filter { it.id !in settings.hiddenTabs }.ifEmpty { allTabs.take(1) }
 
     var tab by rememberSaveable { mutableStateOf("today") }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -169,16 +170,21 @@ fun AppNav(
         if (wasSignedIn && !auth.signedIn) {
             // A deliberate sign-out returns to the login screen; a cold start
             // with a saved refresh token never passes through here.
-            authSkippedThisProcess.value = false
+            StoreRepository.setAuthSkipped(false)
         }
         wasSignedIn = auth.signedIn
     }
 
-    LaunchedEffect(requestedTab) {
+    LaunchedEffect(requestedTab, tabs) {
         val request = requestedTab ?: return@LaunchedEffect
         when (request) {
             "settings" -> settingsOpen = true
-            "today", "tasks", "focus", "stats", "ranks" -> {
+            else -> if (allTabs.any { it.id == request }) {
+                // A widget or shortcut may point at a tab the user hid; honour
+                // the tap and bring that tab back.
+                if (tabs.none { it.id == request }) {
+                    StoreRepository.setTabHidden(request, false)
+                }
                 settingsOpen = false
                 tab = request
             }
@@ -186,10 +192,17 @@ fun AppNav(
         onRequestHandled()
     }
 
+    // Hiding the tab the user is standing on quietly returns them home.
+    LaunchedEffect(tabs.map { it.id }) {
+        if (tabs.none { it.id == tab }) tab = tabs.first().id
+    }
+
     LaunchedEffect(Unit) {
         StoreRepository.events.collect { event ->
             celebration = when (event) {
-                is GritEvent.FocusCompleted -> if (event.wasFocus) {
+                // In the foreground the full-screen alarm owns the moment; the
+                // confetti would only rattle behind it.
+                is GritEvent.FocusCompleted -> if (event.wasFocus && !AppForeground.isForeground) {
                     Celebration(
                         id = System.nanoTime(),
                         kind = "focus",
@@ -215,9 +228,11 @@ fun AppNav(
     }
 
     BackHandler(
-        enabled = celebration != null || pendingCategoryDelete != null || sheet != null || settingsOpen
+        enabled = alarmActive != null || celebration != null ||
+            pendingCategoryDelete != null || sheet != null || settingsOpen
     ) {
         when {
+            alarmActive != null -> CompletionAlarm.stop()
             celebration != null -> celebration = null
             pendingCategoryDelete != null -> pendingCategoryDelete = null
             sheet != null -> sheet = null
@@ -230,48 +245,56 @@ fun AppNav(
         return
     }
 
-    if (!auth.signedIn && !authSkippedThisProcess.value) {
+    if (!auth.signedIn && !settings.authSkipped) {
         AuthScreen(
             onSignedIn = {
-                authSkippedThisProcess.value = true
+                StoreRepository.setAuthSkipped(false)
                 celebration = null
             },
-            onSkip = { authSkippedThisProcess.value = true }
+            onSkip = { StoreRepository.setAuthSkipped(true) }
         )
         return
     }
 
-    val page = if (settingsOpen) "settings" else tab
-    val pageOrder = listOf("today", "tasks", "focus", "stats", "ranks")
-    val title = if (settingsOpen) "Settings" else tabs.firstOrNull { it.id == tab }?.label ?: "Habits"
-    val subtitle = when (page) {
-        "settings" -> "Tune Panadoro to your rhythm"
-        "today" -> LocalDate.now().format(
-            DateTimeFormatter.ofPattern("EEEE, d MMMM", com.gritnative.app.data.AppLocale.current())
-        )
-        "tasks" -> "${store.openTaskCount()} open · ${store.dueTodayTaskCount()} due today"
-        "focus" -> {
-            val tag = store.activeTag
-            if (tag == null) "Pick a tag to begin" else "${tag.name} · ${tag.focusMinutes}m focus · ${tag.cycles} cycles"
-        }
-        "stats" -> "One rhythm for every tag"
-        "ranks" -> if (auth.signedIn) {
-            "Only the tags people chose to publish"
-        } else {
-            "Sign in to join the shared board"
-        }
-        else -> ""
-    }
+    val pageOrder = tabs.map { it.id }
+    val title = if (settingsOpen) "Settings"
+    else tabs.firstOrNull { it.id == tab }?.label ?: tabs.firstOrNull()?.label ?: "Habits"
 
     val timer = store.timer
     val running = timer?.running == true
 
-    // One pager holds the five tabs: swiping sideways moves between them, and
-    // a navigation-bar tap glides the same pages.
-    val pagerState = rememberPagerState(
-        initialPage = pageOrder.indexOf(tab).coerceAtLeast(0),
-        pageCount = { pageOrder.size }
-    )
+    // The always-on display: with the option on, a running phase and an
+    // untouched screen fade into the dim countdown after a little while. The
+    // stage's moon button does the same immediately; any touch brings the
+    // full app back, and a stopped phase always leaves.
+    LaunchedEffect(settings.alwaysOnDisplay, running, alarmActive != null) {
+        if (alarmActive != null) {
+            Aod.active = false
+            return@LaunchedEffect
+        }
+        if (!running || !settings.alwaysOnDisplay) {
+            Aod.active = false
+            return@LaunchedEffect
+        }
+        while (true) {
+            if (!Aod.active && System.currentTimeMillis() - Aod.lastInteraction > AOD_AFTER_MS) {
+                Aod.active = true
+            }
+            delay(5_000)
+        }
+    }
+
+    // One pager holds the visible tabs: swiping sideways moves between them,
+    // and a navigation-bar tap glides the same pages. The state is keyed to
+    // the visible-tab list so hiding a tab earlier in the list cannot make the
+    // pager's old index point at a different tab.
+    val pagerKey = pageOrder.joinToString("|")
+    val pagerState = key(pagerKey) {
+        rememberPagerState(
+            initialPage = pageOrder.indexOf(tab).coerceAtLeast(0),
+            pageCount = { pageOrder.size }
+        )
+    }
 
     // The tab follows the swipe in real time: targetPage flips the moment a
     // drag makes the neighbouring page dominant, so the header and the nav
@@ -288,7 +311,7 @@ fun AppNav(
     }
 
     // A tab tap (or a deep link) glides the pager to that page.
-    LaunchedEffect(tab, settingsOpen) {
+    LaunchedEffect(tab, settingsOpen, pagerState) {
         if (settingsOpen) return@LaunchedEffect
         val target = pageOrder.indexOf(tab).coerceAtLeast(0)
         if (!pagerState.isScrollInProgress && pagerState.settledPage != target) {
@@ -300,16 +323,21 @@ fun AppNav(
         Column(Modifier.fillMaxSize()) {
             GritTopBar(
                 title = title,
-                subtitle = subtitle,
                 settingsOpen = settingsOpen,
                 timer = timer,
                 onBack = { settingsOpen = false },
                 onTimerClick = {
+                    // A running timer is always reachable: if Focus was hidden,
+                    // tapping its chip brings the tab back for this visit.
+                    if (tabs.none { it.id == "focus" }) {
+                        StoreRepository.setTabHidden("focus", false)
+                    }
                     settingsOpen = false
                     tab = "focus"
                 },
                 onSettings = { settingsOpen = true }
             )
+            Spacer(Modifier.height(12.dp))
 
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 AnimatedContent(
@@ -361,7 +389,6 @@ fun AppNav(
                                     when (pageOrder[page]) {
                                     "tasks" -> TasksScreen(
                                         store = store,
-                                        onNewTask = { sheet = AppSheet.Task("") },
                                         onEditTask = { sheet = AppSheet.Task(it) }
                                     )
                                     "focus" -> FocusScreen(
@@ -379,11 +406,10 @@ fun AppNav(
                                         store = store,
                                         settings = settings,
                                         signedIn = auth.signedIn,
-                                        onSignIn = { authSkippedThisProcess.value = false }
+                                        onSignIn = { StoreRepository.setAuthSkipped(false) }
                                     )
                                     else -> TodayScreen(
                                         store = store,
-                                        showCompleted = settings.showCompleted,
                                         weekStartMonday = settings.weekStartMonday,
                                         onNewHabit = { sheet = AppSheet.Habit("") },
                                         onEditHabit = { sheet = AppSheet.Habit(it) },
@@ -430,19 +456,32 @@ fun AppNav(
             )
         }
 
-        GritBottomNav(
-            current = tab,
-            store = store,
-            running = running,
-            onSelect = {
-                settingsOpen = false
-                tab = it
-            },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp)
-        )
+        AnimatedVisibility(
+            visible = !settingsOpen,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = 360f),
+                initialOffsetY = { it }
+            ) + fadeIn(tween(180)),
+            exit = slideOutVertically(
+                animationSpec = tween(240, easing = FastOutSlowInEasing),
+                targetOffsetY = { it }
+            ) + fadeOut(tween(150))
+        ) {
+            GritBottomNav(
+                tabs = tabs,
+                current = tab,
+                store = store,
+                running = running,
+                onSelect = {
+                    settingsOpen = false
+                    tab = it
+                },
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp)
+            )
+        }
 
         celebration?.let { item ->
             CelebrationOverlay(
@@ -452,6 +491,17 @@ fun AppNav(
                 symbol = item.symbol,
                 success = item.kind == "habits",
                 onDismiss = { celebration = null }
+            )
+        }
+
+        // The dim, always-on countdown sits under everything else that can
+        // claim the screen, and the completion alarm sits above it.
+        AodLayer(store = store, timer = timer, suppressed = alarmActive != null)
+
+        alarmActive?.let { payload ->
+            CompletionAlarmOverlay(
+                payload = payload,
+                onDismiss = { CompletionAlarm.stop() }
             )
         }
     }
@@ -519,7 +569,6 @@ fun AppNav(
 @Composable
 private fun GritTopBar(
     title: String,
-    subtitle: String,
     settingsOpen: Boolean,
     timer: TimerState?,
     onBack: () -> Unit,
@@ -530,110 +579,88 @@ private fun GritTopBar(
     // bar (and the focus screen's own clock) — never the pager or the pages.
     val now = rememberTimerNow(timer)
     val secondsLeft = computeSecondsLeft(timer, now)
-    // The bar keeps a stable height no matter whether the timer chip is
-    // showing: the chip is capped well below the bar's own height, so pages
-    // never get nudged up and down when a session starts or ends.
-    Row(
+    // One centred header, with the controls floating at the two ends. No
+    // subtitle: the title alone names the page.
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .defaultMinSize(minHeight = 56.dp)
-            .padding(start = if (settingsOpen) 8.dp else 18.dp, end = 10.dp, top = 7.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+            .defaultMinSize(minHeight = 100.dp)
+            .padding(horizontal = 10.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center
     ) {
-        if (settingsOpen) {
-            RoundIconButton(
-                symbol = "arrow_back",
-                onClick = onBack,
-                size = 38.dp,
-                iconSize = 19.dp,
-                container = Grit.colors.field
+        AnimatedContent(
+            targetState = title,
+            transitionSpec = {
+                (fadeIn(tween(240)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it / 3 })
+                    .togetherWith(fadeOut(tween(130)) + slideOutVertically(tween(160)) { -it / 4 })
+            },
+            label = "top-title"
+        ) { value ->
+            Text(
+                text = value,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 44.sp,
+                lineHeight = 48.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
             )
-            Spacer(Modifier.size(1.dp))
         }
-        Column(modifier = Modifier.weight(1f)) {
-            AnimatedContent(
-                targetState = title,
-                transitionSpec = {
-                    (fadeIn(tween(240)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it / 3 })
-                        .togetherWith(fadeOut(tween(130)) + slideOutVertically(tween(160)) { -it / 4 })
-                },
-                label = "top-title"
-            ) { value ->
-                Text(
-                    text = value,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 23.sp,
-                    lineHeight = 27.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+
+        Row(
+            modifier = Modifier.align(Alignment.CenterStart),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (settingsOpen) {
+                RoundIconButton(
+                    symbol = "arrow_back",
+                    onClick = onBack,
+                    size = 38.dp,
+                    iconSize = 19.dp,
+                    container = Grit.colors.field
                 )
-            }
-            AnimatedContent(
-                targetState = subtitle,
-                transitionSpec = {
-                    (fadeIn(tween(280)) + slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 4 })
-                        .togetherWith(fadeOut(tween(140)))
-                },
-                label = "top-subtitle"
-            ) { value ->
-                if (value.isNotBlank()) {
-                    Text(
-                        text = value,
-                        color = Grit.colors.subtext,
-                        fontSize = 10.5.sp,
-                        lineHeight = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
         }
 
-        AnimatedVisibility(
-            visible = timer?.running == true,
-            enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.7f),
-            exit = fadeOut(tween(130)) + scaleOut(targetScale = 0.7f)
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            val focus = timer?.phase == "focus"
-            Surface(
-                onClick = onTimerClick,
-                modifier = Modifier.height(30.dp),
-                shape = CircleShape,
-                color = if (focus) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = if (focus) MaterialTheme.colorScheme.onPrimaryContainer
-                else MaterialTheme.colorScheme.onTertiaryContainer
+            AnimatedVisibility(
+                visible = timer?.running == true,
+                enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.7f),
+                exit = fadeOut(tween(130)) + scaleOut(targetScale = 0.7f)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                val focus = timer?.phase == "focus"
+                Surface(
+                    onClick = onTimerClick,
+                    modifier = Modifier.height(30.dp),
+                    shape = CircleShape,
+                    color = if (focus) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = if (focus) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onTertiaryContainer
                 ) {
-                    Symbol(
-                        if (focus) "psychiatry" else "coffee",
-                        size = 13.dp,
-                        filled = true
-                    )
-                    AnimatedContent(
-                        targetState = formatClock(secondsLeft),
-                        transitionSpec = {
-                            (
-                                fadeIn(tween(150)) +
-                                    scaleIn(initialScale = 0.8f, animationSpec = tween(200))
-                                ).togetherWith(
-                                fadeOut(tween(80)) +
-                                    scaleOut(targetScale = 0.8f, animationSpec = tween(120))
-                            )
-                        },
-                        label = "top-clock"
-                    ) { clock ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Symbol(
+                            if (focus) "psychiatry" else "coffee",
+                            size = 13.dp,
+                            filled = true
+                        )
+                        // The clock digits swap instantly — a per-second cross-fade
+                        // reads as a flicker. The desktop app does the same
+                        // (animateChange: false on its clock text).
                         Text(
-                            text = clock,
+                            text = formatClock(secondsLeft),
                             fontSize = 11.sp,
                             lineHeight = 14.sp,
                             fontWeight = FontWeight.Bold,
@@ -642,23 +669,24 @@ private fun GritTopBar(
                     }
                 }
             }
-        }
 
-        if (!settingsOpen) {
-            RoundIconButton(
-                symbol = "settings",
-                onClick = onSettings,
-                size = 38.dp,
-                iconSize = 19.dp,
-                container = Grit.colors.field,
-                content = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (!settingsOpen) {
+                RoundIconButton(
+                    symbol = "settings",
+                    onClick = onSettings,
+                    size = 38.dp,
+                    iconSize = 19.dp,
+                    container = Grit.colors.field,
+                    content = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun GritBottomNav(
+    tabs: List<GritTab>,
     current: String,
     store: Store,
     running: Boolean,
@@ -688,7 +716,8 @@ private fun GritBottomNav(
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val baseStyle = LocalTextStyle.current
-    val labelSlotWidth = remember(labelSize, arabic) {
+    val labelKey = tabs.joinToString("|") { it.label }
+    val labelSlotWidth = remember(labelSize, arabic, labelKey) {
         with(density) {
             tabs.maxOf { item ->
                 textMeasurer.measure(
@@ -708,7 +737,8 @@ private fun GritBottomNav(
         label = "nav-index"
     )
 
-    val barWidth = barPadding * 2 + buttonSize * 5 + barGap * 4 + labelGap + labelSlotWidth
+    val barWidth = barPadding * 2 + buttonSize * tabs.size +
+        barGap * (tabs.size - 1).coerceAtLeast(0) + labelGap + labelSlotWidth
 
     Box(
         modifier = modifier

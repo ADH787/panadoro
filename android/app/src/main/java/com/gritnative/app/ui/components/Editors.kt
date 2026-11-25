@@ -108,12 +108,6 @@ fun GritSheet(
                 lineHeight = 29.sp,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = subtitle,
-                color = Grit.colors.subtext,
-                fontSize = 12.5.sp,
-                lineHeight = 17.sp
-            )
             Spacer(Modifier.height(4.dp))
             content()
             Spacer(Modifier.height(6.dp))
@@ -225,7 +219,8 @@ fun HabitEditorSheet(
                     time = existing.time,
                     target = existing.target.coerceAtLeast(1),
                     unit = existing.unit,
-                    note = existing.note
+                    note = existing.note,
+                    weeklyTimes = existing.weeklyTimes.coerceIn(0, 7)
                 )
             } else {
                 HabitDraft(categoryId = categories.firstOrNull()?.id.orEmpty())
@@ -244,8 +239,15 @@ fun HabitEditorSheet(
             GritButton(
                 label = if (existing != null) "Save habit" else "Create habit",
                 onClick = {
-                    if (existing != null) StoreRepository.updateHabit(existing.id, draft)
-                    else StoreRepository.createHabit(draft)
+                    // For a weekly habit the quota is the goal: a day is done
+                    // with a single tick, so the per-day target stays at one.
+                    val toSave = if (draft.weeklyTimes > 0) {
+                        draft.copy(target = 1, unit = "times")
+                    } else {
+                        draft
+                    }
+                    if (existing != null) StoreRepository.updateHabit(existing.id, toSave)
+                    else StoreRepository.createHabit(toSave)
                     onDismiss()
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -308,59 +310,111 @@ fun HabitEditorSheet(
                 )
             }
         }
-        Label("Days")
-        DayChips(
-            selected = draft.days.toSet(),
-            onToggle = { day ->
-                val next = draft.days.toMutableSet()
-                if (!next.remove(day)) next.add(day)
-                if (next.isEmpty()) next.add(day)
-                draft = draft.copy(days = next.toList().sorted())
+        Label("Schedule")
+        val weekly = draft.weeklyTimes > 0
+        SegmentedSelector(
+            options = listOf(
+                SegmentOption(false, "Certain days", "date_range"),
+                SegmentOption(true, "Times a week", "repeat")
+            ),
+            selected = weekly,
+            onSelect = { value ->
+                draft = if (value) {
+                    draft.copy(weeklyTimes = draft.weeklyTimes.coerceIn(1, 7).let { if (it == 0) 3 else it })
+                } else {
+                    draft.copy(weeklyTimes = 0)
+                }
             },
             accent = accent,
             accentContainer = accentContainer,
             onAccentContainer = onAccent
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Grit.colors.field, RoundedCornerShape(16.dp))
-                .padding(horizontal = 11.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ShapeBadge(
-                symbol = "flag",
-                shapeName = "Cookie4Sided",
-                container = accentContainer,
-                content = onAccent,
-                size = 36.dp,
-                iconSize = 18.dp
-            )
-            Column(Modifier.weight(1f)) {
-                Text("Daily target", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        if (weekly) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Grit.colors.field, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 11.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ShapeBadge(
+                    symbol = "repeat",
+                    shapeName = "Cookie4Sided",
+                    container = accentContainer,
+                    content = onAccent,
+                    size = 36.dp,
+                    iconSize = 18.dp
+                )
                 Text(
-                    "How many times before it counts as done",
-                    fontSize = 10.5.sp,
-                    lineHeight = 13.sp,
-                    color = Grit.colors.subtext
+                    text = "Days a week",
+                    modifier = Modifier.weight(1f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Stepper(
+                    value = draft.weeklyTimes.coerceIn(1, 7),
+                    onChange = { value -> draft = draft.copy(weeklyTimes = value.coerceIn(1, 7)) },
+                    from = 1,
+                    to = 7,
+                    accent = accent
                 )
             }
-            Stepper(
-                value = draft.target,
-                onChange = { value -> draft = draft.copy(target = value) },
-                from = 1,
-                to = 100,
-                accent = accent
+        } else {
+            Label("Days")
+            DayChips(
+                selected = draft.days.toSet(),
+                onToggle = { day ->
+                    val next = draft.days.toMutableSet()
+                    if (!next.remove(day)) next.add(day)
+                    if (next.isEmpty()) next.add(day)
+                    draft = draft.copy(days = next.toList().sorted())
+                },
+                accent = accent,
+                accentContainer = accentContainer,
+                onAccentContainer = onAccent
             )
         }
-        GritField(
-            value = draft.unit,
-            onValueChange = { value -> draft = draft.copy(unit = value) },
-            caption = "Unit",
-            placeholder = "times",
-            symbol = "straighten"
-        )
+        if (!weekly) {
+            // A weekly habit has no daily target — the weekly quota is the goal.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Grit.colors.field, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 11.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ShapeBadge(
+                    symbol = "flag",
+                    shapeName = "Cookie4Sided",
+                    container = accentContainer,
+                    content = onAccent,
+                    size = 36.dp,
+                    iconSize = 18.dp
+                )
+                Text(
+                    text = "Daily target",
+                    modifier = Modifier.weight(1f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Stepper(
+                    value = draft.target,
+                    onChange = { value -> draft = draft.copy(target = value) },
+                    from = 1,
+                    to = 100,
+                    accent = accent
+                )
+            }
+            GritField(
+                value = draft.unit,
+                onValueChange = { value -> draft = draft.copy(unit = value) },
+                caption = "Unit",
+                placeholder = "times",
+                symbol = "straighten"
+            )
+        }
         GritField(
             value = draft.time,
             onValueChange = { value -> draft = draft.copy(time = value) },
@@ -614,13 +668,6 @@ fun TaskEditorSheet(
                         content = Grit.colors.subtext
                     )
                 }
-            }
-            if (draft.subtasks.isEmpty()) {
-                Text(
-                    "No steps yet. A task can be one small thing.",
-                    color = Grit.colors.subtext,
-                    fontSize = 11.sp
-                )
             }
         }
     }
@@ -912,33 +959,49 @@ private fun StepperRow(
     step: Int = 1,
     format: (Int) -> String
 ) {
-    Row(
+    // One quiet card per setting: the stepper for exact taps, and a thick
+    // round slider underneath for the satisfying drag.
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Grit.colors.field, RoundedCornerShape(16.dp))
-            .padding(horizontal = 9.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp)
+            .background(Grit.colors.field, RoundedCornerShape(18.dp))
+            .padding(horizontal = 11.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        ShapeBadge(
-            symbol = symbol,
-            shapeName = "Cookie7Sided",
-            container = accentContainer,
-            content = onAccent,
-            size = 36.dp,
-            iconSize = 18.dp
-        )
-        Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-            Text(description, fontSize = 10.5.sp, lineHeight = 13.sp, color = Grit.colors.subtext)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ShapeBadge(
+                symbol = symbol,
+                shapeName = "Cookie7Sided",
+                container = accentContainer,
+                content = onAccent,
+                size = 44.dp,
+                iconSize = 22.dp
+            )
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Stepper(
+                value = value,
+                onChange = onValueChange,
+                from = from,
+                to = to,
+                step = step,
+                format = format,
+                accent = accent
+            )
         }
-        Stepper(
+        GritSlider(
             value = value,
-            onChange = onValueChange,
+            onValueChange = onValueChange,
             from = from,
             to = to,
             step = step,
-            format = format,
             accent = accent
         )
     }
@@ -1106,19 +1169,8 @@ fun DeleteTagSheet(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    "This removes it from the timer and stats.",
-                    color = colors.onContainer.copy(alpha = 0.82f),
-                    fontSize = 11.sp
-                )
             }
         }
-        Text(
-            "Your finished sessions are kept, so the time you already spent still counts. You can create a tag with the same name later.",
-            color = Grit.colors.subtext,
-            fontSize = 12.5.sp,
-            lineHeight = 17.sp
-        )
         if (store.activeTags.size <= 1) {
             Text(
                 "Keep at least one tag so the timer has somewhere to live.",

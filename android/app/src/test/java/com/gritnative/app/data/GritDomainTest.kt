@@ -582,6 +582,136 @@ class GritDomainTest {
         assertEquals(600L, buckets.first { it.id == "evening" }.seconds)
     }
 
+    // ── Weekly habits ──────────────────────────────────────────────────
+
+    /** Nov 8 2026 is a Sunday; the week below uses the Sunday default. */
+    private val weekSunday = "2026-11-08"
+
+    private fun weeklyHabit(times: Int, createdAtMs: Long = 0L) = Habit(
+        id = "h-week",
+        name = "Weekly",
+        weeklyTimes = times,
+        createdAt = createdAtMs,
+        updatedAt = 1,
+        device = "seed"
+    )
+
+    private fun doneEntry(habitId: String, date: String) = Entry(
+        id = "e-$date",
+        habitId = habitId,
+        date = date,
+        value = 1,
+        updatedAt = 1,
+        device = "seed"
+    )
+
+    @Test
+    fun `a weekly habit is due every day and done for today once the week quota is met`() {
+        val habit = weeklyHabit(2)
+        val store = emptyStore(device, now).copy(
+            habits = listOf(habit),
+            // Sunday and Monday done; "today" is Wednesday of that week.
+            entries = listOf(doneEntry("h-week", "2026-11-08"), doneEntry("h-week", "2026-11-09"))
+        )
+
+        assertTrue(store.scheduledOn(habit, "2026-11-11"))
+        assertTrue(store.habitDoneEffective(habit, "2026-11-11", monday = false))
+        // Tuesday alone would not be enough for a 2-day quota.
+        val thinStore = emptyStore(device, now).copy(
+            habits = listOf(weeklyHabit(2)),
+            entries = listOf(doneEntry("h-week", "2026-11-10"))
+        )
+        assertFalse(thinStore.habitDoneEffective(weeklyHabit(2), "2026-11-11", monday = false))
+    }
+
+    @Test
+    fun `the weekly streak counts days and only resets at a missed week`() {
+        val habit = weeklyHabit(3)
+        // Week 1 (Nov 1..7, the week before the Sunday week above): quota met
+        // with three days. Week 2 (Nov 8..14): two days done so far, today is
+        // the 10th — the streak holds both weeks' days.
+        val store = emptyStore(device, now).copy(
+            habits = listOf(habit.copy(createdAt = localMs("2026-11-01", 0, 0))),
+            entries = listOf(
+                doneEntry("h-week", "2026-11-01"),
+                doneEntry("h-week", "2026-11-03"),
+                doneEntry("h-week", "2026-11-05"),
+                doneEntry("h-week", "2026-11-08"),
+                doneEntry("h-week", "2026-11-09")
+            )
+        )
+
+        assertEquals(5, store.weeklyHabitStreak(habit, "2026-11-10", monday = false))
+    }
+
+    @Test
+    fun `a finished week that missed its quota cuts the weekly streak to zero`() {
+        val habit = weeklyHabit(3)
+        // Week 1 met its quota, but week 2 ended with only one day: the thread
+        // resets at the week boundary, and week 3 starts a new count.
+        val store = emptyStore(device, now).copy(
+            habits = listOf(habit.copy(createdAt = localMs("2026-11-01", 0, 0))),
+            entries = listOf(
+                doneEntry("h-week", "2026-11-01"),
+                doneEntry("h-week", "2026-11-02"),
+                doneEntry("h-week", "2026-11-04"),
+                doneEntry("h-week", "2026-11-09"),
+                doneEntry("h-week", "2026-11-18"),
+                doneEntry("h-week", "2026-11-19")
+            )
+        )
+
+        assertEquals(2, store.weeklyHabitStreak(habit, "2026-11-19", monday = false))
+    }
+
+    @Test
+    fun `the weekly best streak remembers the peak before a reset`() {
+        val habit = weeklyHabit(3)
+        // Week 1 met the quota with three days; week 2 had one day and missed,
+        // so the peak (4) survives even though the live streak restarted.
+        val store = emptyStore(device, now).copy(
+            habits = listOf(habit.copy(createdAt = localMs("2026-11-01", 0, 0))),
+            entries = listOf(
+                doneEntry("h-week", "2026-11-01"),
+                doneEntry("h-week", "2026-11-03"),
+                doneEntry("h-week", "2026-11-05"),
+                doneEntry("h-week", "2026-11-09")
+            )
+        )
+
+        assertEquals(4, store.weeklyHabitBestStreak(habit, "2026-11-10", monday = false))
+        assertEquals(4, store.weeklyHabitStreak(habit, "2026-11-10", monday = false))
+    }
+
+    @Test
+    fun `skipped fragments do not count as sessions in stats`() {
+        // A full session, a half-way abandoned one, and a tiny skipped try:
+        // only the first two are real sessions.
+        val day = "2026-11-23"
+        val store = emptyStore(device, now).copy(
+            focusSessions = listOf(
+                FocusSession(
+                    id = "s-full", phase = "focus", startedAt = localMs(day, 9, 0),
+                    endedAt = localMs(day, 9, 25), durationSec = 1500, plannedSec = 1500,
+                    completed = true, updatedAt = 1, device = "seed"
+                ),
+                FocusSession(
+                    id = "s-half", phase = "focus", startedAt = localMs(day, 10, 0),
+                    endedAt = localMs(day, 10, 13), durationSec = 800, plannedSec = 1500,
+                    completed = false, updatedAt = 1, device = "seed"
+                ),
+                FocusSession(
+                    id = "s-tiny", phase = "focus", startedAt = localMs(day, 11, 0),
+                    endedAt = localMs(day, 11, 2), durationSec = 124, plannedSec = 1500,
+                    completed = false, updatedAt = 1, device = "seed"
+                )
+            )
+        )
+
+        val sessions = store.sessionsInRange(1, "focus", day)
+        assertEquals(listOf("s-full", "s-half"), sessions.map { it.id })
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private fun habit(

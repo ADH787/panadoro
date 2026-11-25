@@ -17,7 +17,8 @@ import android.util.Log
  */
 object SessionAlarmPlayer {
     private const val TAG = "GritAlarm"
-    private const val RING_MS = 12_000L
+    /** A completion rings long enough to be found, without being endless. */
+    private const val RING_MS = 20_000L
 
     private val handler = Handler(Looper.getMainLooper())
     private var player: MediaPlayer? = null

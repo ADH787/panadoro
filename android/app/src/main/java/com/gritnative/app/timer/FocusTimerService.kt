@@ -38,6 +38,7 @@ class FocusTimerService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var loopJob: Job? = null
     private var foregroundStarted = false
+    private var screenReceiver: AodScreenReceiver? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -45,6 +46,11 @@ class FocusTimerService : Service() {
         super.onCreate()
         createTimerChannel()
         CompletionAlert.createChannels(this)
+        // While a session runs, a screen that goes dark with the always-on
+        // display up lights straight back up.
+        if (screenReceiver == null) {
+            screenReceiver = AodScreenReceiver().also { registerAodScreenReceiver(this, it) }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -94,6 +100,9 @@ class FocusTimerService : Service() {
                     lastWidgetMinute = widgetMinute
                     WidgetUpdater.refreshFocus(this@FocusTimerService)
                 }
+                // The system overlay clock (lock screen / other apps) rides
+                // the same tick.
+                AodOverlayWindow.updateIfShowing(this@FocusTimerService)
                 if (remaining <= 0) {
                     val completion = StoreRepository.completeCurrentPhase()
                     if (completion != null) {
@@ -173,6 +182,8 @@ class FocusTimerService : Service() {
             Intent(this, FocusTimerService::class.java).setAction(ACTION_SKIP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        // The standard progress bar keeps its place in the notification; the
+        // wavy line stays a feature of the in-app ring only.
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(subtitle)
@@ -210,6 +221,8 @@ class FocusTimerService : Service() {
     }
 
     override fun onDestroy() {
+        screenReceiver?.let { runCatching { unregisterReceiver(it) } }
+        screenReceiver = null
         scope.cancel()
         super.onDestroy()
     }

@@ -8,7 +8,8 @@ data class HabitDraft(
     val time: String = "",
     val target: Int = 1,
     val unit: String = "times",
-    val note: String = ""
+    val note: String = "",
+    val weeklyTimes: Int = 0
 )
 
 data class TaskDraft(

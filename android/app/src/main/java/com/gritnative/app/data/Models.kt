@@ -18,6 +18,12 @@ data class Habit(
     val target: Int = 1,
     val unit: String = "times",
     val note: String = "",
+    /**
+     * 0 keeps the daily schedule (the [days] list decides when it is due).
+     * 1..7 switches the habit to "this many days a week, any days you like";
+     * older clients that do not know the field keep working unchanged.
+     */
+    val weeklyTimes: Int = 0,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
     val device: String = "",
