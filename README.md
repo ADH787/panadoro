@@ -4,6 +4,9 @@ Habits, tasks and tagged focus in one quiet place. Panadoro is free and
 open-source software, released under the
 [GNU General Public License version 2](LICENSE) (GPL-2.0-only).
 
+Panadoro is inspired by **[Grit](https://github.com/shub39/Grit)** and
+**[Tomato](https://github.com/nsh07/Tomato)** — see [Credits](#credits).
+
 This repository holds the three clients that share the same Firebase backend:
 
 - **Android** (`android/`) — Kotlin/Jetpack Compose APK with a launch login,
@@ -102,6 +105,23 @@ python3 -m http.server 8123
 
 Open `http://127.0.0.1:8123`. Add `?static=1` to freeze animations for
 screenshots, and `?tab=today|tasks|focus|stats|ranks` to deep-link a page.
+
+## Credits
+
+Panadoro builds on the ideas and design of two excellent open-source Android
+projects:
+
+- **[Grit](https://github.com/shub39/Grit)** by
+  [shub39](https://github.com/shub39) — a simple todo list and habit tracker.
+  Grit inspired Panadoro's habits, tasks, widgets and Material 3 design.
+- **[Tomato](https://github.com/nsh07/Tomato)** by
+  [nsh07](https://github.com/nsh07) — a minimalist, data-oriented Pomodoro
+  timer for Android and desktop. Tomato inspired Panadoro's focus timer,
+  Material 3 Expressive styling and timer stats.
+
+Thank you to both authors and all of their contributors. Grit and Tomato are
+licensed under the GNU General Public License v3.0; follow the links above for
+their source and full license text.
 
 ## Contributors
 

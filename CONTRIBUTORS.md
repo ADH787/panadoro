@@ -14,6 +14,17 @@ listed here. Contributions are accepted under the terms of the
   programmer. Contributed implementation, refactoring, debugging, reviews and
   documentation across the Android, Quickshell and web clients.
 
+## Credits
+
+- **[Grit](https://github.com/shub39/Grit)** by
+  [shub39](https://github.com/shub39) — the todo list and habit tracker that
+  inspired Panadoro's habits, tasks, widgets and Material 3 design.
+  Licensed under GPL-3.0.
+- **[Tomato](https://github.com/nsh07/Tomato)** by
+  [nsh07](https://github.com/nsh07) — the minimalist Pomodoro timer that
+  inspired Panadoro's focus timer, Material 3 Expressive styling and timer
+  stats. Licensed under GPL-3.0.
+
 ## Third-party work
 
 Panadoro also uses these separately licensed projects:
