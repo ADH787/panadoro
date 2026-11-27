@@ -281,5 +281,5 @@ AES/GCM key and are never stored in the APK.
 Copyright (C) 2026 ADH787.
 
 The Android client is part of Panadoro and is released under the
-[GNU General Public License version 2](../LICENSE) (GPL-2.0-only). See
+[GNU General Public License version 3](../LICENSE) (GPL-3.0-only). See
 [CONTRIBUTORS.md](../CONTRIBUTORS.md) for the people who built it.

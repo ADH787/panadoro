@@ -2,7 +2,7 @@
 
 Panadoro is maintained by ADH787 and built with help from the contributors
 listed here. Contributions are accepted under the terms of the
-[GNU General Public License version 2](LICENSE) (GPL-2.0-only).
+[GNU General Public License version 3](LICENSE) (GPL-3.0-only).
 
 ## Maintainer
 

@@ -2,7 +2,7 @@
 
 Habits, tasks and tagged focus in one quiet place. Panadoro is free and
 open-source software, released under the
-[GNU General Public License version 2](LICENSE) (GPL-2.0-only).
+[GNU General Public License version 3](LICENSE) (GPL-3.0-only).
 
 Panadoro is inspired by **[Grit](https://github.com/shub39/Grit)** and
 **[Tomato](https://github.com/nsh07/Tomato)** — see [Credits](#credits).
@@ -120,8 +120,9 @@ projects:
   Material 3 Expressive styling and timer stats.
 
 Thank you to both authors and all of their contributors. Grit and Tomato are
-licensed under the GNU General Public License v3.0; follow the links above for
-their source and full license text.
+licensed under the GNU General Public License v3.0, and Panadoro is released
+under the same license; follow the links above for their source and full
+license text.
 
 ## Contributors
 
@@ -137,12 +138,12 @@ Copyright (C) 2026 ADH787.
 
 Panadoro is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
-Foundation, version 2 of the License.
+Foundation, version 3 of the License.
 
 Panadoro is distributed in the hope that it will be useful, but **without any
 warranty**; without even the implied warranty of merchantability or fitness for
 a particular purpose. See the [GNU General Public License version
-2](LICENSE) for the full text.
+3](LICENSE) for the full text.
 
 Third-party components keep their own licenses: the Titan One font is under the
 SIL Open Font License 1.1, morphdom is under the MIT license, Lucide icons are
