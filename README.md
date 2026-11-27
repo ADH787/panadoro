@@ -1,7 +1,10 @@
 # Panadoro
 
-Habits, tasks and tagged focus in one quiet place. This repository holds the
-three clients that share the same Firebase backend:
+Habits, tasks and tagged focus in one quiet place. Panadoro is free and
+open-source software, released under the
+[GNU General Public License version 2](LICENSE) (GPL-2.0-only).
+
+This repository holds the three clients that share the same Firebase backend:
 
 - **Android** (`android/`) — Kotlin/Jetpack Compose APK with a launch login,
   permanent session, Ranks and a full motion pass. **2.0.0** brings the new
@@ -99,3 +102,28 @@ python3 -m http.server 8123
 
 Open `http://127.0.0.1:8123`. Add `?static=1` to freeze animations for
 screenshots, and `?tab=today|tasks|focus|stats|ranks` to deep-link a page.
+
+## Contributors
+
+- **ADH787** — creator and maintainer.
+- **DeepSeek** — AI pair programmer; contributed code, debugging and
+  documentation across the Android, Quickshell and web clients.
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the full list.
+
+## License
+
+Copyright (C) 2026 ADH787.
+
+Panadoro is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, version 2 of the License.
+
+Panadoro is distributed in the hope that it will be useful, but **without any
+warranty**; without even the implied warranty of merchantability or fitness for
+a particular purpose. See the [GNU General Public License version
+2](LICENSE) for the full text.
+
+Third-party components keep their own licenses: the Titan One font is under the
+SIL Open Font License 1.1, morphdom is under the MIT license, Lucide icons are
+under the ISC license, and the Gradle wrapper is under the Apache License 2.0.

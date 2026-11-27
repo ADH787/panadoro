@@ -275,3 +275,11 @@ change is re-pulled instead of overwritten. Every record has `updatedAt` and a
 deletion tombstone, so edits from two devices are merged instead of overwriting
 each other. The ID and refresh tokens are encrypted with an Android-keystore
 AES/GCM key and are never stored in the APK.
+
+## License
+
+Copyright (C) 2026 ADH787.
+
+The Android client is part of Panadoro and is released under the
+[GNU General Public License version 2](../LICENSE) (GPL-2.0-only). See
+[CONTRIBUTORS.md](../CONTRIBUTORS.md) for the people who built it.
